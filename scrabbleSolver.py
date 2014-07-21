@@ -300,21 +300,23 @@ def best(hand):
 
         for char in hand: # initialize
             # format (word-so-far, start-coord, front/back, remaining-hand)
+            temp = list(hand)
+            temp.remove(char)
             if justif:
                 if x > 0:
-                    stack.append( ([char, anchor], (x - 1, y), True, list(hand).remove(char)) )
+                    stack.append( ([char, anchor], (x - 1, y), True, temp))
                 if x < boardLength - 1:
-                    stack.append( ([anchor, char], (x, y), False, list(hand).remove(char)) )
+                    stack.append( ([anchor, char], (x, y), False, temp))
             else:
                 if y > 0:
-                    stack.append( ([char, anchor], (x, y - 1), True, list(hand).remove(char)) )
+                    stack.append( ([char, anchor], (x, y - 1), True, temp))
                 if y < boardLength - 1:
-                    stack.append( ([anchor, char], (x, y), False, list(hand).remove(char)) )
+                    stack.append( ([anchor, char], (x, y), False, temp))
 
         while stack:
             frame = stack.pop()
             word, (x, y), front, pool = frame
-            print('{} {} {} {} {}'.format(word, x, y, front, pool))
+            #print('{} {} {} {} {}'.format(word, x, y, front, pool))
             if justif:
                 if front:
                     if (y == 0 and board[x][y+1]) \
@@ -394,32 +396,36 @@ def best(hand):
                     bestPlay = (word, (x,y), justif)
 
             for char in pool: # recurse:
+                temp = list(pool)
+                temp.remove(char)
+                L = len(word)
                 if justif:
                     if x > 0:
-                        stack.append( ([char] + word, (x - 1, y), True, list(pool).remove(char)) )
-                    if x < boardLength - 1:
-                        stack.append( (word + [char], (x, y), False, list(pool).remove(char)) )
+                        stack.append( ([char] + word, (x - 1, y), True, temp) )
+                    if x + L - 1 < boardLength - 1:
+                        stack.append( (word + [char], (x, y), False, temp) )
                 else:
                     if y > 0:
-                        stack.append( ([char] + word, (x, y - 1), True, list(pool).remove(char)) )
-                    if y < boardLength - 1:
-                        stack.append( (word + [char], (x, y), False, list(pool).remove(char)) )
+                        stack.append( ([char] + word, (x, y - 1), True, temp) )
+                    if y + L - 1 < boardLength - 1:
+                        stack.append( (word + [char], (x, y), False, temp) )
 
-    return bestPlay, bestScore
+    return list(bestPlay), bestScore
 
 #print(best('rsliuhc'))
 
 
 
 def main():
+    global board
     while True:
         action = input('\nwhat up: ')
         if action == 'm': # get move
             hand = input('input hand: ')
             print('processing...')
-            score, play = best(hand)
-            print('{} starting at ({}, {}), {}'.format(
-                play[0], play[1][0], play[1][1], 'rightward' if play[2] else 'downward'))
+            play, score = best(hand)
+            print('{} starting at ({}, {}), {}, {} points'.format(
+                ''.join(play[0]), play[1][0], play[1][1], 'rightward' if play[2] else 'downward', int(score)))
         elif action == 'u': # update board
             word = input('word: ')
             x = input('x coordinate: ')
@@ -439,7 +445,7 @@ def main():
                 board = [[None for i in range(boardLength)] for j in range(boardLength)]
                 import os
                 try:
-                    os.remove('')
+                    os.remove(tempFile)
                 except OSError:
                     pass
         elif action == 'e': # exit
