@@ -8,6 +8,9 @@ NEED:
 
 # GLOBALS: global values, boardLength, board, specials, dict
 
+ACROSS, DOWN = True, False
+
+
 """ production: """
 def setupSpecials():
     # Triple Words:
@@ -41,18 +44,9 @@ def setupSpecials():
     specials[7][11] = specials[11][7] = '+2'
 def wordList():
     with open('wordsEn.txt', 'r') as f:
-        content = []
+        content = {}
         for line in f:
-            content.append(line.strip())
-    return content
-def preprocess(wordList):
-    content = {}
-    for word in wordList:
-        key = ''.join(sorted(word))
-        if not key in content:
-            content[key] = [word]
-        else:
-            content[key].append(word)
+            content[line.strip('\n')] = True
     return content
 def saveBoard():
     with open(tempFile, 'w') as f:
@@ -84,7 +78,7 @@ def init():
     board = [[None for i in range(boardLength)] for j in range(boardLength)]
     specials = [[None for i in range(boardLength)] for j in range(boardLength)]
     setupSpecials()
-    dict = preprocess(wordList())
+    dict = wordList()
     tempFile = 'scrabbleTemp.out'
     board = loadBoard() # load from memory
 init()
@@ -125,6 +119,15 @@ def addWord(word, coords, right):
             board[x][y + i] = j
 
 """ derelict: """
+def preprocess(wordList):
+    content = {}
+    for word in wordList:
+        key = ''.join(sorted(word))
+        if not key in content:
+            content[key] = [word]
+        else:
+            content[key].append(word)
+    return content
 def powerSet(letters):
     content, stack = [], [''.join(sorted(letters))]
     while stack:
@@ -135,25 +138,6 @@ def powerSet(letters):
             if not sub in stack and not sub in content:
                 stack.append(sub)
     return content
-def anchors(hand):
-    """  :return: list (x, y, Right?) """
-    content = []
-    for i in range(boardLength):
-        for j in range(boardLength):
-            if board[i][j]:
-                if (i == 0 and not board[i+1][j]) \
-                    or (i == boardLength - 1 and not board[i-1][j]) \
-                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
-                        not board[i+1][j] and not board[i-1][j]):
-                    content.append((i,j, True))
-                if (j == 0 and not board[i][j+1]) \
-                    or (j == boardLength - 1 and not board[i][j-1]) \
-                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
-                        not board[i][j+1] and not board[i][j-1]):
-                    content.append((i,j, False))
-    return content
-
-""" testing: """
 def getScore(coords, across, *mods):
     """ returns score of word at coordinates
         *mods is the index of the chars with active modifiers
@@ -180,22 +164,6 @@ def getScore(coords, across, *mods):
         else:
             y += 1
     return runningScore * wordMod
-
-def wordCheck(coords, right):
-    word, runningScore, wordMod = [], 0, 1
-    x, y = coords
-    while x in range(boardLength) and y in range(boardLength) and board[x][y]:
-        word.append(board[x][y])
-        if right:
-            x += 1
-        else:
-            y += 1
-    if ''.join(sorted(word)) in dict and \
-        ''.join(word) in dict[''.join(sorted(word))]:
-        return True
-    else:
-        return False
-
 def tryPlace(word, coords, right):
     """ returns true/false, and score/none """
     if right:
@@ -271,7 +239,84 @@ def tryPlace(word, coords, right):
         board[x][y] = None
     return True, runningScore
 
-print(tryPlace('sup', (0, 0), True))
+""" testing: """
+def anchors(hand):
+    """  :return: list (x, y, Right?) """
+    content = []
+    for i in range(boardLength):
+        for j in range(boardLength):
+            if board[i][j]:
+                if (i == 0 and not board[i+1][j]) \
+                    or (i == boardLength - 1 and not board[i-1][j]) \
+                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
+                        not board[i+1][j] and not board[i-1][j]):
+                    content.append((i,j, True))
+                if (j == 0 and not board[i][j+1]) \
+                    or (j == boardLength - 1 and not board[i][j-1]) \
+                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
+                        not board[i][j+1] and not board[i][j-1]):
+                    content.append((i,j, False))
+    return content
+
+def scoreWord(word, coords, across):
+    runningScore, wordMod = 0, 1
+    x, y = coords
+    for char in word:
+        if not board[x][y]:
+            thisWordMod, thisCharMod = 1, 1
+            if specials[x][y] and specials[x][y][0] == '+':
+                thisCharMod = int(specials[x][y][1])
+            elif specials[x][y]:
+                thisWordMod = int(specials[x][y][1])
+                wordMod *= thisWordMod
+            runningScore += values[char] * thisCharMod
+            # check adjacencies:
+            if across:
+                if (y > 0 and board[x][y - 1]) or \
+                (y < boardLength  - 1 and board[x][y + 1]): # check vertical intersect
+                    j = y
+                    while (j > 0 and board[x][j - 1]):
+                        j -= 1
+                    intersectScore = 0
+                    while (j < boardLength and (board[x][j] or j == y)):
+                        if j == y:
+                            intersectScore += values[board[x][j]] * thisCharMod
+                        else:
+                            intersectScore += values[board[x][j]]
+                        j += 1
+                    runningScore += intersectScore * thisWordMod
+            else:
+                if (x > 0 and board[x - 1][y]) or \
+                (x < boardLength - 1 and board[x + 1][y]): # check horizontal intersect
+                    i = x
+                    while (i > 0 and board[i - 1][y]):
+                        i -= 1
+                    intersectScore = 0
+                    while (i < boardLength and (board[i][y] or i == x)):
+                        if i == x:
+                            intersectScore += values[board[i][y]] * thisCharMod
+                        else:
+                            intersectScore += values[board[i][y]]
+                        i += 1
+                    runningScore += intersectScore * thisWordMod
+        else:
+            runningScore += values[char]
+        if across:
+            x += 1
+        else:
+            y += 1
+    return runningScore * wordMod
+
+def wordCheck(coords, right):
+    word = []
+    x, y = coords
+    while x in range(boardLength) and y in range(boardLength) and board[x][y]:
+        word.append(board[x][y])
+        if right:
+            x += 1
+        else:
+            y += 1
+    return ''.join(word) in dict
 
 def firstPlay(hand):
     global boardLength, dict
@@ -281,15 +326,16 @@ def firstPlay(hand):
         if choice in dict:
             for word in dict[choice]:
                 for i in range(len(word)):
-                    tryScore = score(word, (boardLength//2, boardLength//2 - i), False)
+                    tryScore = scoreWord(word, (boardLength//2, boardLength//2 - i), False)
                     if tryScore > bestScore:
                         bestScore = tryScore
                         bestPlay = (word, (boardLength//2, boardLength//2 - i), False)
-                    tryScore = score(word, (boardLength//2-i, boardLength//2), True)
+                    tryScore = scoreWord(word, (boardLength//2-i, boardLength//2), True)
                     if tryScore > bestScore:
                         bestScore = tryScore
                         bestPlay = (word, (boardLength//2 - i, boardLength//2), True)
     return list(bestPlay), bestScore
+
 def best(hand):
     if not board[boardLength // 2][boardLength // 2]: # first move
         return firstPlay(hand)
@@ -297,7 +343,7 @@ def best(hand):
     allAnchors = anchors(hand)
     for x, y, justif in allAnchors:
         anchor = board[x][y]
-        stack, memos = [], []
+        stack = []
 
         for char in hand: # initialize
             # format (word-so-far, start-coord, front/back, remaining-hand)
@@ -325,11 +371,11 @@ def best(hand):
                     or (y in range(1, boardLength - 1 )
                     and (board[x][y+1] or board[x][y-1])): # resolve adjacent conflicts (Right/front)
                         _y = y
-                        while (_y > 0 and board[x][y-1]):
+                        while (_y > 0 and board[x][_y - 1]):
                             _y -= 1
                         valid = True
                         board[x][y], temp = word[0], board[x][y]
-                        if wordCheck( (x, _y), False):
+                        if not wordCheck( (x, _y), False):
                             valid = False
                         board[x][y] = temp
                         if not valid:
@@ -344,15 +390,19 @@ def best(hand):
                     or (y in range(1, boardLength - 1)
                     and (board[x + L - 1][y + 1] or board[x + L - 1][y - 1])): # resolve adjacent conflicts (Right/back)
                         _y = y
-                        while (_y > 0 and board[x + L - 1][y - 1]):
+                        while (_y > 0 and board[x + L - 1][_y - 1]):
                             _y -= 1
                         valid = True
-                        board[x + L - 1][y], temp = word[0], board[x + L - 1][y]
-                        if wordCheck( (x + L - 1, _y), False):
+                        board[x + L - 1][y], temp = word[-1], board[x + L - 1][y]
+                        if not wordCheck( (x + L - 1, _y), False):
                             valid = False
                         board[x + L - 1][y] = temp
                         if not valid:
                             continue
+                    c = 0
+                    while (x + L + c < boardLength and board[x + L + c][y]): # collect extra characters
+                        word.append(board[x + L + c][y])
+                        c += 1
             else:
                 if front:
                     if (x == 0 and board[x + 1][y]) \
@@ -360,11 +410,11 @@ def best(hand):
                     or (x in range(1, boardLength - 1 )
                     and (board[x + 1][y] or board[x - 1][y])): # resolve adjacent conflicts (Down/front)
                         _x = x
-                        while (_x > 0 and board[x - 1][y]):
+                        while (_x > 0 and board[_x - 1][y]):
                             _x -= 1
                         valid = True
                         board[x][y], temp = word[0], board[x][y]
-                        if wordCheck( (_x, y), True):
+                        if not wordCheck( (_x, y), True):
                             valid = False
                         board[x][y] = temp
                         if not valid:
@@ -379,19 +429,22 @@ def best(hand):
                     or (x in range(1, boardLength - 1 )
                     and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/front)
                         _x = x
-                        while (_x > 0 and board[x - 1][y + L - 1]):
+                        while (_x > 0 and board[_x - 1][y + L - 1]):
                             _x -= 1
                         valid = True
-                        board[x][y + L - 1], temp = word[0], board[x][y + L - 1]
-                        if wordCheck( (_x, y + L - 1), True):
+                        board[x][y + L - 1], temp = word[-1], board[x][y + L - 1]
+                        if not wordCheck( (_x, y + L - 1), True):
                             valid = False
                         board[x][y + L - 1] = temp
                         if not valid:
                             continue
+                    c = 0
+                    while (y + L + c < boardLength and board[x][y + L + c]): # collect extra characters
+                        word.append(board[x][y + L + c])
+                        c += 1
 
-            key = ''.join(sorted(word))
-            if key in dict and ''.join(word) in dict[key]: # check word
-                tryScore = score(word, (x,y), justif)
+            if ''.join(word) in dict: # check word
+                tryScore = scoreWord(word, (x,y), justif)
                 if tryScore > bestScore:
                     bestScore = tryScore
                     bestPlay = (word, (x,y), justif)
@@ -412,6 +465,34 @@ def best(hand):
                         stack.append( (word + [char], (x, y), False, temp) )
 
     return list(bestPlay), bestScore
+
+def getBest(hand):
+    if not board[boardLength // 2][boardLength // 2]: # first move
+        return firstPlay(hand)
+    bestScore, bestPlay = 0, None
+    allAnchors = anchors(hand)
+    for x, y, justif in allAnchors:
+        anchor = board[x][y]
+        stack = []
+
+        for char in hand: # initialize
+            # format (word-so-far, start-coord, front/back, remaining-hand)
+            temp = list(hand)
+            temp.remove(char)
+            if justif:
+                if x > 0:
+                    stack.append( ([char, anchor], (x - 1, y), True, temp))
+                if x < boardLength - 1:
+                    stack.append( ([anchor, char], (x, y), False, temp))
+            else:
+                if y > 0:
+                    stack.append( ([char, anchor], (x, y - 1), True, temp))
+                if y < boardLength - 1:
+                    stack.append( ([anchor, char], (x, y), False, temp))
+
+        while stack:
+            frame = stack.pop()
+            word, (x, y), front, pool = frame
 
 
 def main():
