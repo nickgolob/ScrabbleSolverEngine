@@ -280,7 +280,7 @@ def scoreWord(word, coords, across):
                     intersectScore = 0
                     while (j < boardLength and (board[x][j] or j == y)):
                         if j == y:
-                            intersectScore += values[board[x][j]] * thisCharMod
+                            intersectScore += values[char] * thisCharMod
                         else:
                             intersectScore += values[board[x][j]]
                         j += 1
@@ -294,7 +294,7 @@ def scoreWord(word, coords, across):
                     intersectScore = 0
                     while (i < boardLength and (board[i][y] or i == x)):
                         if i == x:
-                            intersectScore += values[board[i][y]] * thisCharMod
+                            intersectScore += values[char] * thisCharMod
                         else:
                             intersectScore += values[board[i][y]]
                         i += 1
