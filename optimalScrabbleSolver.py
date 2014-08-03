@@ -16,7 +16,7 @@ def setupSpecials():
     # Triple Words:
     for i in range(0, boardLength, 7):
         for j in range(0, boardLength, 7):
-            if i != 7 and j != 7:
+            if not (i == 7 and j == 7):
                 specials[i][j] = '*3'
     # Double Words:
     for i in range(1, 5):
@@ -73,7 +73,6 @@ def saveDictionary():
     data = open('subs.data', 'wb')
     pickle.dump(subs, data)
     data.close()
-
 def loadDictionary():
     import pickle
     data = open('subs.data', 'rb')
@@ -117,7 +116,6 @@ def init():
     board = loadBoard() # load from memory
 init()
 
-
 def displaySpecials():
     for i in range(boardLength):
         for j in range(boardLength):
@@ -155,26 +153,6 @@ def addWord(word, coords, right):
 
 
 """ solvers : """
-def anchors(hand):
-    """  :return: list (x, y, Right?) """
-    content = []
-    for i in range(boardLength):
-        for j in range(boardLength):
-            if board[i][j]:
-                if (i == 0 and not board[i+1][j]) \
-                    or (i == boardLength - 1 and not board[i-1][j]) \
-                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
-                        not board[i+1][j] and not board[i-1][j]):
-                    content.append((i,j, True))
-                if (j == 0 and not board[i][j+1]) \
-                    or (j == boardLength - 1 and not board[i][j-1]) \
-                    or (i in range(1, boardLength - 1) and j in range(1, boardLength - 1) and
-                        not board[i][j+1] and not board[i][j-1]):
-                    content.append((i,j, False))
-
-
-    return content
-
 def scoreWord(word, coords, across):
     runningScore, wordMod = 0, 1
     x, y = coords
@@ -233,75 +211,100 @@ def wordCheck(coords, right):
             x += 1
         else:
             y += 1
-    return ''.join(word) in dict
+    key = ''.join(word)
+    return key in subs and subs[key][0]
 
 """ needs to be refactored: """
-def powerSet(letters):
-    content, stack = [], [''.join(sorted(letters))]
-    while stack:
-        current = stack.pop(0)
-        content.append(current)
-        for i in current:
-            sub = current.replace(i, '', 1)
-            if not sub in stack and not sub in content:
-                stack.append(sub)
+
+def anchors():
+    n = boardLength
+    if not board[n // 2][n // 2]: # first move
+        return [([], n // 2, n // 2, True),
+                ([], n // 2, n // 2, False)]
+    content, memos = [], []
+    for x in range(n):
+        for y in range(n):
+            if board[x][y]:
+
+                word = list(board[x][y])
+                _x = x
+                while (_x < n - 1 and board[_x + 1][y]):
+                    _x += 1
+                    word.append(board[_x + 1][y])
+                _x = x
+                while (_x > 0 and board[_x - 1][y]):
+                    _x -= 1
+                    word.insert(0, board[_x - 1][y])
+
+                if not (_x, y, True) in memos:
+                    content.append((word, _x, y, True))
+                    memos.append((_x, y, True))
+
+                word = list(board[x][y])
+                _y = y
+                while (_y < n - 1 and board[_y + 1]):
+                    _y += 1
+                    word.append(board[x][_y + 1])
+                _y = y
+                while (_y > 0 and board[x][_y - 1]):
+                    _y -= 1
+                    word.insert(0, board[x][_y - 1])
+
+                if not (_x, y, True) in memos:
+                    content.append((word, _x, y, True))
+                    memos.append((_x, y, True))
+
+                TL, TR, BL, BR = \
+                (x > 0 and y > 0 and not board[x - 1][y - 1],
+                x < n - 1 and y > 0 and not board[x + 1][y - 1],
+                x > 0 and y < n - 1 and not board[x - 1][y + 1],
+                x < n - 1 and y < n - 1 and not board[x + 1][y + 1])
+
+                if TL and TR and not (x, y - 1, True) in memos:
+                    content.append((x, y - 1, True))
+                    memos.append((x, y - 1, True))
+                if TL and BL and not (x - 1, y, False) in memos:
+                    content.append((x - 1, y, False))
+                    memos.append((x - 1, y, False))
+                if BL and BR and not (x, y + 1, True) in memos:
+                    content.append((x, y + 1, True))
+                    memos.append((x, y + 1, True))
+                if BR and TR and not (x + 1, y, False) in memos:
+                    content.append((x + 1, y, False))
+                    memos.append((x + 1, y, False))
     return content
-def firstPlay(hand):
-    global boardLength, dict
-    bestScore, bestPlay = 0, None
-    choices = powerSet(hand)
-    for choice in choices:
-        if choice in dict:
-            for word in dict[choice]:
-                for i in range(len(word)):
-                    tryScore = scoreWord(word, (boardLength//2, boardLength//2 - i), False)
-                    if tryScore > bestScore:
-                        bestScore = tryScore
-                        bestPlay = (word, (boardLength//2, boardLength//2 - i), False)
-                    tryScore = scoreWord(word, (boardLength//2-i, boardLength//2), True)
-                    if tryScore > bestScore:
-                        bestScore = tryScore
-                        bestPlay = (word, (boardLength//2 - i, boardLength//2), True)
-    return list(bestPlay), bestScore
-
-def anchors2():
-    pass
-
-def best2(hand):
-    if not board[boardLength // 2][boardLength // 2]: # first move
-        return firstPlay(hand)
-    bestScore, bestPlay = 0, None
-    allAnchors = anchors2(hand)
 
 def best(hand):
-    if not board[boardLength // 2][boardLength // 2]: # first move
-        return firstPlay(hand)
+    n = boardLength
     bestScore, bestPlay = 0, None
-    allAnchors = anchors(hand)
-    for x, y, justif in allAnchors:
-        anchor = board[x][y]
+    allAnchors = anchors()
+    for word, x, y, across in allAnchors:
+        key = ''.join(word)
+        if not key in subs:
+            continue
         stack = []
-
-        for char in hand: # initialize
-            # format (word-so-far, start-coord, front/back, remaining-hand)
-            temp = list(hand)
-            temp.remove(char)
-            if justif:
-                if x > 0:
-                    stack.append( ([char, anchor], (x - 1, y), True, temp))
-                if x < boardLength - 1:
-                    stack.append( ([anchor, char], (x, y), False, temp))
-            else:
-                if y > 0:
-                    stack.append( ([char, anchor], (x, y - 1), True, temp))
-                if y < boardLength - 1:
-                    stack.append( ([anchor, char], (x, y), False, temp))
+        ref = subs[key]
+        for char in hand:
+            if char in ref[1] or char in ref[2]:
+                remainder = list(hand)
+                remainder.remove(char)
+                L = len(word)
+                if across:
+                    if x > 0 and char in ref[1]:
+                        stack.append( ([char] + word, (x - 1, y), True, remainder) )
+                    if x + L - 1 < n - 1 and char in ref[2]:
+                        stack.append( (word + [char], (x, y), False, remainder) )
+                else:
+                    if y > 0 and char in ref[1]:
+                        stack.append( ([char] + word, (x, y - 1), True, remainder) )
+                    if y + L - 1 < n - 1 and char in ref[2]:
+                        stack.append( (word + [char], (x, y), False, remainder) )
 
         while stack:
             frame = stack.pop()
             word, (x, y), front, pool = frame
-            #print('{} {} {} {} {}'.format(word, x, y, front, pool))
-            if justif:
+
+            if across:
                 if front:
                     if (y == 0 and board[x][y+1]) \
                     or (y == boardLength - 1 and board[x][y-1]) \
@@ -380,26 +383,28 @@ def best(hand):
                         word.append(board[x][y + L + c])
                         c += 1
 
-            if ''.join(word) in dict: # check word
-                tryScore = scoreWord(word, (x,y), justif)
+            ref = subs[''.join(word)]
+            if ref[0]: # check word
+                tryScore = scoreWord(word, (x,y), across)
                 if tryScore > bestScore:
                     bestScore = tryScore
-                    bestPlay = (word, (x,y), justif)
+                    bestPlay = (word, (x,y), across)
 
             for char in pool: # recurse:
-                temp = list(pool)
-                temp.remove(char)
-                L = len(word)
-                if justif:
-                    if x > 0:
-                        stack.append( ([char] + word, (x - 1, y), True, temp) )
-                    if x + L - 1 < boardLength - 1:
-                        stack.append( (word + [char], (x, y), False, temp) )
-                else:
-                    if y > 0:
-                        stack.append( ([char] + word, (x, y - 1), True, temp) )
-                    if y + L - 1 < boardLength - 1:
-                        stack.append( (word + [char], (x, y), False, temp) )
+                if char in ref[1] or char in ref[2]:
+                    remainder = list(pool)
+                    remainder.remove(char)
+                    L = len(word)
+                    if across:
+                        if x > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
+                        if x + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+                    else:
+                        if y > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
+                        if y + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
 
     return list(bestPlay), bestScore
 
