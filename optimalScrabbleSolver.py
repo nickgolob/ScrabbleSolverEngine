@@ -10,6 +10,46 @@ NEED:
 
 ACROSS, DOWN = True, False
 
+class Heap():
+    def __init__(self, compare):
+        self.heap, self.size = [], 0
+        self.compare = compare
+        """
+        if min:
+            self.compare = lambda x, y: x < y
+        else:
+            self.compare = lambda x, y: x > y
+        """
+    def insert(self, element):
+        self.size += 1
+        self.heap.append(element)
+        self._percolateUp()
+    def pop(self):
+        self.size -= 1
+        self.heap[0], self.heap[-1] = self.heap[-1], self.heap[0]
+        x = self.heap.pop()
+        self._percolateDown()
+        return x
+    def _percolateUp(self):
+        x = self.size - 1
+        while x > 0:
+            if self.compare(self.heap[x], self.heap[x // 2]):
+                self.heap[x], self.heap[x // 2] = self.heap[x // 2], self.heap[x]
+                x = x // 2
+            else:
+                break
+    def _percolateDown(self):
+        x = 0
+        while 2*x < self.size:
+            if 2*x + 1 < self.size and self.compare(self.heap[2*x + 1], self.heap[2*x]):
+                y = 2*x + 1
+            else:
+                y = 2*x
+            if self.compare(self.heap[y], self.heap[x]):
+                self.heap[y], self.heap[x] = self.heap[x], self.heap[y]
+                x = y
+            else:
+                break
 
 """ board processing / setup : """
 def setupSpecials():
@@ -75,7 +115,7 @@ def saveDictionary():
     data.close()
 def loadDictionary():
     import pickle
-    data = open('subs.data', 'rb')
+    data = open('subs2.data', 'rb')
     subs = pickle.load(data)
     data.close()
     return subs
@@ -101,10 +141,10 @@ def loadBoard():
 def init():
     global values, boardLength, board, specials, dict, tempFile, subs
     values = {'a':1, 'b':3, 'c':3, 'd':2, 'e':1, 'f':4,
-          'g':3, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
-          'm':2, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
-          's':1, 't':1, 'u':1, 'v':5, 'w':2, 'x':8,
-          'y':1, 'z':10}
+          'g':2, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
+          'm':3, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
+          's':1, 't':1, 'u':1, 'v':5, 'w':4, 'x':8,
+          'y':4, 'z':10}
     boardLength = 15
     board = [[None for i in range(boardLength)] for j in range(boardLength)]
     specials = [[None for i in range(boardLength)] for j in range(boardLength)]
@@ -150,11 +190,15 @@ def addWord(word, coords, right):
             board[x + i][y] = j
         else:
             board[x][y + i] = j
+def removeChar(coords):
+    global board
+    x, y = coords
+    board[x][y] = None
 
 
 """ solvers : """
 def scoreWord(word, coords, across):
-    runningScore, wordMod = 0, 1
+    runningScore, sideScores, wordMod = 0, 0, 1
     x, y = coords
     for char in word:
         if not board[x][y]:
@@ -179,7 +223,7 @@ def scoreWord(word, coords, across):
                         else:
                             intersectScore += values[board[x][j]]
                         j += 1
-                    runningScore += intersectScore * thisWordMod
+                    sideScores += intersectScore * thisWordMod
             else:
                 if (x > 0 and board[x - 1][y]) or \
                 (x < boardLength - 1 and board[x + 1][y]): # check horizontal intersect
@@ -193,14 +237,14 @@ def scoreWord(word, coords, across):
                         else:
                             intersectScore += values[board[i][y]]
                         i += 1
-                    runningScore += intersectScore * thisWordMod
+                    sideScores += intersectScore * thisWordMod
         else:
             runningScore += values[char]
         if across:
             x += 1
         else:
             y += 1
-    return runningScore * wordMod
+    return sideScores + runningScore * wordMod
 
 def wordCheck(coords, right):
     word = []
@@ -219,8 +263,8 @@ def wordCheck(coords, right):
 def anchors():
     n = boardLength
     if not board[n // 2][n // 2]: # first move
-        return [([], n // 2, n // 2, True),
-                ([], n // 2, n // 2, False)]
+        return [([], (n // 2, n // 2), True),
+                ([], (n // 2, n // 2), False)]
     content, memos = [], []
     for x in range(n):
         for y in range(n):
@@ -229,30 +273,30 @@ def anchors():
                 word = list(board[x][y])
                 _x = x
                 while (_x < n - 1 and board[_x + 1][y]):
-                    _x += 1
                     word.append(board[_x + 1][y])
+                    _x += 1
                 _x = x
                 while (_x > 0 and board[_x - 1][y]):
-                    _x -= 1
                     word.insert(0, board[_x - 1][y])
+                    _x -= 1
 
                 if not (_x, y, True) in memos:
-                    content.append((word, _x, y, True))
+                    content.append((word, (_x, y), True))
                     memos.append((_x, y, True))
 
                 word = list(board[x][y])
                 _y = y
-                while (_y < n - 1 and board[_y + 1]):
-                    _y += 1
+                while (_y < n - 1 and board[x][_y + 1]):
                     word.append(board[x][_y + 1])
+                    _y += 1
                 _y = y
                 while (_y > 0 and board[x][_y - 1]):
-                    _y -= 1
                     word.insert(0, board[x][_y - 1])
+                    _y -= 1
 
-                if not (_x, y, True) in memos:
-                    content.append((word, _x, y, True))
-                    memos.append((_x, y, True))
+                if not (x, _y, False) in memos:
+                    content.append((word, (x, _y), False))
+                    memos.append((x, _y, False))
 
                 TL, TR, BL, BR = \
                 (x > 0 and y > 0 and not board[x - 1][y - 1],
@@ -260,17 +304,17 @@ def anchors():
                 x > 0 and y < n - 1 and not board[x - 1][y + 1],
                 x < n - 1 and y < n - 1 and not board[x + 1][y + 1])
 
-                if TL and TR and not (x, y - 1, True) in memos:
-                    content.append((x, y - 1, True))
+                if TL and TR and not board[x][y - 1] and not (x, y - 1, True) in memos:
+                    content.append(([], (x, y - 1), True))
                     memos.append((x, y - 1, True))
-                if TL and BL and not (x - 1, y, False) in memos:
-                    content.append((x - 1, y, False))
+                if TL and BL and not board[x - 1][y] and not (x - 1, y, False) in memos:
+                    content.append(([], (x - 1, y), False))
                     memos.append((x - 1, y, False))
-                if BL and BR and not (x, y + 1, True) in memos:
-                    content.append((x, y + 1, True))
+                if BL and BR and not board[x][y + 1] and not (x, y + 1, True) in memos:
+                    content.append(([], (x, y + 1), True))
                     memos.append((x, y + 1, True))
-                if BR and TR and not (x + 1, y, False) in memos:
-                    content.append((x + 1, y, False))
+                if BR and TR and not board[x + 1][y] and not (x + 1, y, False) in memos:
+                    content.append(([], (x + 1, y), False))
                     memos.append((x + 1, y, False))
     return content
 
@@ -278,27 +322,36 @@ def best(hand):
     n = boardLength
     bestScore, bestPlay = 0, None
     allAnchors = anchors()
-    for word, x, y, across in allAnchors:
+    for word, (x, y), across in allAnchors:
         key = ''.join(word)
-        if not key in subs:
-            continue
         stack = []
-        ref = subs[key]
-        for char in hand:
-            if char in ref[1] or char in ref[2]:
+
+        if not key:
+            for char in hand:
                 remainder = list(hand)
                 remainder.remove(char)
-                L = len(word)
-                if across:
-                    if x > 0 and char in ref[1]:
-                        stack.append( ([char] + word, (x - 1, y), True, remainder) )
-                    if x + L - 1 < n - 1 and char in ref[2]:
-                        stack.append( (word + [char], (x, y), False, remainder) )
-                else:
-                    if y > 0 and char in ref[1]:
-                        stack.append( ([char] + word, (x, y - 1), True, remainder) )
-                    if y + L - 1 < n - 1 and char in ref[2]:
-                        stack.append( (word + [char], (x, y), False, remainder) )
+                stack.append( ([char], (x, y), True, remainder) )
+
+        elif not key in subs:
+            continue
+
+        else:
+            ref = subs[key]
+            for char in hand:
+                if char in ref[1] or char in ref[2]:
+                    remainder = list(hand)
+                    remainder.remove(char)
+                    L = len(word)
+                    if across:
+                        if x > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
+                        if x + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+                    else:
+                        if y > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
+                        if y + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
 
         while stack:
             frame = stack.pop()
@@ -383,7 +436,11 @@ def best(hand):
                         word.append(board[x][y + L + c])
                         c += 1
 
-            ref = subs[''.join(word)]
+            key = ''.join(word)
+            if not key in subs:
+                continue
+            ref = subs[key]
+
             if ref[0]: # check word
                 tryScore = scoreWord(word, (x,y), across)
                 if tryScore > bestScore:
@@ -426,6 +483,11 @@ def main():
             y = input('y coordinate: ')
             right = input('justification: ')
             addWord(word, (int(x), int(y)), True if right[0] == 'r' else False)
+            saveBoard()
+        elif action == 'r':
+            x = input('x coordinate: ')
+            y = input('y coordinate: ')
+            removeChar((int(x), int(y)))
             saveBoard()
         elif action == 'd': # display board
             print('')
