@@ -465,20 +465,182 @@ def best(hand):
 
     return list(bestPlay), bestScore
 
+def getBestPlays(hand, m):
+    """
+    :param hand: playable characters in hand
+    :param m: number of best plays returned
+    :returns: a heap containing top m best
+    """
+    n = boardLength
+    bestplays = Heap(lambda x, y : x[0] < y[0]) # min-heap
+    memos = []
+
+    allAnchors = anchors()
+    for word, (x, y), across in allAnchors:
+        key = ''.join(word)
+        stack = []
+
+        if not key:
+            for char in hand:
+                remainder = list(hand)
+                remainder.remove(char)
+                stack.append( ([char], (x, y), True, remainder) )
+
+        elif not key in subs:
+            continue
+
+        else:
+            ref = subs[key]
+            for char in hand:
+                if char in ref[1] or char in ref[2]:
+                    remainder = list(hand)
+                    remainder.remove(char)
+                    L = len(word)
+                    if across:
+                        if x > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
+                        if x + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+                    else:
+                        if y > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
+                        if y + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+
+        while stack:
+            frame = stack.pop()
+            word, (x, y), front, pool = frame
+
+            if (word, (x, y), across) in memos:
+                continue
+            memos.append((word, (x, y), across))
+
+            if across:
+                if front:
+                    if (y == 0 and board[x][y+1]) \
+                    or (y == n - 1 and board[x][y-1]) \
+                    or (y in range(1, n - 1 )
+                    and (board[x][y+1] or board[x][y-1])): # resolve adjacent conflicts (Right/front)
+                        _y = y
+                        while (_y > 0 and board[x][_y - 1]):
+                            _y -= 1
+                        valid = True
+                        board[x][y], temp = word[0], board[x][y]
+                        if not wordCheck( (x, _y), False):
+                            valid = False
+                        board[x][y] = temp
+                        if not valid:
+                            continue
+                    while (x > 0 and board[x - 1][y]): # collect extra characters
+                        x -= 1
+                        word.insert(0, board[x][y])
+                else:
+                    L = len(word)
+                    if (y == 0 and board[x + L - 1][y + 1]) \
+                    or (y == n - 1 and board[x + L - 1][y - 1]) \
+                    or (y in range(1, n - 1)
+                    and (board[x + L - 1][y + 1] or board[x + L - 1][y - 1])): # resolve adjacent conflicts (Right/back)
+                        _y = y
+                        while (_y > 0 and board[x + L - 1][_y - 1]):
+                            _y -= 1
+                        valid = True
+                        board[x + L - 1][y], temp = word[-1], board[x + L - 1][y]
+                        if not wordCheck( (x + L - 1, _y), False):
+                            valid = False
+                        board[x + L - 1][y] = temp
+                        if not valid:
+                            continue
+                    c = 0
+                    while (x + L + c < n and board[x + L + c][y]): # collect extra characters
+                        word.append(board[x + L + c][y])
+                        c += 1
+            else:
+                if front:
+                    if (x == 0 and board[x + 1][y]) \
+                    or (x == n - 1 and board[x - 1][y]) \
+                    or (x in range(1, n - 1 )
+                    and (board[x + 1][y] or board[x - 1][y])): # resolve adjacent conflicts (Down/front)
+                        _x = x
+                        while (_x > 0 and board[_x - 1][y]):
+                            _x -= 1
+                        valid = True
+                        board[x][y], temp = word[0], board[x][y]
+                        if not wordCheck( (_x, y), True):
+                            valid = False
+                        board[x][y] = temp
+                        if not valid:
+                            continue
+                    while (y > 0 and board[x][y - 1]): # collect extra characters
+                        y -= 1
+                        word.insert(0, board[x][y])
+                else:
+                    L = len(word)
+                    if (x == 0 and board[x + 1][y + L - 1]) \
+                    or (x == n - 1 and board[x - 1][y + L - 1]) \
+                    or (x in range(1, n - 1 )
+                    and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/front)
+                        _x = x
+                        while (_x > 0 and board[_x - 1][y + L - 1]):
+                            _x -= 1
+                        valid = True
+                        board[x][y + L - 1], temp = word[-1], board[x][y + L - 1]
+                        if not wordCheck( (_x, y + L - 1), True):
+                            valid = False
+                        board[x][y + L - 1] = temp
+                        if not valid:
+                            continue
+                    c = 0
+                    while (y + L + c < n and board[x][y + L + c]): # collect extra characters
+                        word.append(board[x][y + L + c])
+                        c += 1
+
+            key = ''.join(word)
+            if not key in subs:
+                continue
+            ref = subs[key]
+
+            if ref[0]: # check word
+                tryScore = scoreWord(word, (x,y), across)
+                if bestplays.size < m:
+                    bestplays.insert((tryScore, word, (x, y), across))
+                elif tryScore > bestplays.heap[0][0]:
+                    bestplays.pop()
+                    bestplays.insert((tryScore, word, (x, y), across))
+
+            for char in pool: # recurse:
+                if char in ref[1] or char in ref[2]:
+                    remainder = list(pool)
+                    remainder.remove(char)
+                    L = len(word)
+                    if across:
+                        if x > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
+                        if x + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+                    else:
+                        if y > 0 and char in ref[1]:
+                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
+                        if y + L - 1 < n - 1 and char in ref[2]:
+                            stack.append( (word + [char], (x, y), False, remainder) )
+
+    return bestplays
+
 def main():
     global board
     while True:
         action = input('\nwhat up: ')
         if action == 'm': # get move
-            hand = input('input hand: ')
+            hand = input('input hand: ').lower()
+            m = input('# of plays: ')
             print('processing...')
-            play, score = best(hand)
-            print(play)
-            print(score)
-            print('{} starting at ({}, {}), {}, {} points'.format(
-                ''.join(play[0]), play[1][0], play[1][1], 'rightward' if play[2] else 'downward', int(score)))
+            bestplays = getBestPlays(list(hand), int(m))
+            if bestplays.size == 0:
+                print('no available plays now')
+            for play in bestplays.heap:
+                print(' "{}" starting at ({}, {}), {}, {} points'.format(
+                    ''.join(play[1]), play[2][0], play[2][1], 'rightward' if play[3] else 'downward', int(play[0])))
         elif action == 'u': # update board
-            word = input('word: ')
+            word = input('word: ').lower()
             x = input('x coordinate: ')
             y = input('y coordinate: ')
             right = input('justification: ')
@@ -507,6 +669,11 @@ def main():
         elif action == 'e': # exit
             saveBoard()
             return
+        elif action == 'h':
+            print(' m - get best moves\n u - input a word on board\n'
+                  ' r - remove a character\n d - display current board\n'
+                  ' s - display specials\n c - clear the board\n'
+                  ' e - exit gracefully\n h - list of commands')
 
 if __name__ == '__main__':
     init()
