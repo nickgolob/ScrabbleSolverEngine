@@ -87,7 +87,7 @@ def wordList():
         content = {}
         for line in f:
             word = line.strip('\n')
-            if word and len(word) < 16:
+            if word and len(word) in range(2, 16):
                 content[word] = True
     return content
 def substringProcess(dict):
@@ -258,8 +258,6 @@ def wordCheck(coords, right):
     key = ''.join(word)
     return key in subs and subs[key][0]
 
-""" needs to be refactored: """
-
 def anchors():
     n = boardLength
     if not board[n // 2][n // 2]: # first move
@@ -317,153 +315,6 @@ def anchors():
                     content.append(([], (x + 1, y), False))
                     memos.append((x + 1, y, False))
     return content
-
-def best(hand):
-    n = boardLength
-    bestScore, bestPlay = 0, None
-    allAnchors = anchors()
-    for word, (x, y), across in allAnchors:
-        key = ''.join(word)
-        stack = []
-
-        if not key:
-            for char in hand:
-                remainder = list(hand)
-                remainder.remove(char)
-                stack.append( ([char], (x, y), True, remainder) )
-
-        elif not key in subs:
-            continue
-
-        else:
-            ref = subs[key]
-            for char in hand:
-                if char in ref[1] or char in ref[2]:
-                    remainder = list(hand)
-                    remainder.remove(char)
-                    L = len(word)
-                    if across:
-                        if x > 0 and char in ref[1]:
-                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
-                        if x + L - 1 < n - 1 and char in ref[2]:
-                            stack.append( (word + [char], (x, y), False, remainder) )
-                    else:
-                        if y > 0 and char in ref[1]:
-                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
-                        if y + L - 1 < n - 1 and char in ref[2]:
-                            stack.append( (word + [char], (x, y), False, remainder) )
-
-        while stack:
-            frame = stack.pop()
-            word, (x, y), front, pool = frame
-
-            if across:
-                if front:
-                    if (y == 0 and board[x][y+1]) \
-                    or (y == boardLength - 1 and board[x][y-1]) \
-                    or (y in range(1, boardLength - 1 )
-                    and (board[x][y+1] or board[x][y-1])): # resolve adjacent conflicts (Right/front)
-                        _y = y
-                        while (_y > 0 and board[x][_y - 1]):
-                            _y -= 1
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck( (x, _y), False):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
-                    while (x > 0 and board[x - 1][y]): # collect extra characters
-                        x -= 1
-                        word.insert(0, board[x][y])
-                else:
-                    L = len(word)
-                    if (y == 0 and board[x + L - 1][y + 1]) \
-                    or (y == boardLength - 1 and board[x + L - 1][y - 1]) \
-                    or (y in range(1, boardLength - 1)
-                    and (board[x + L - 1][y + 1] or board[x + L - 1][y - 1])): # resolve adjacent conflicts (Right/back)
-                        _y = y
-                        while (_y > 0 and board[x + L - 1][_y - 1]):
-                            _y -= 1
-                        valid = True
-                        board[x + L - 1][y], temp = word[-1], board[x + L - 1][y]
-                        if not wordCheck( (x + L - 1, _y), False):
-                            valid = False
-                        board[x + L - 1][y] = temp
-                        if not valid:
-                            continue
-                    c = 0
-                    while (x + L + c < boardLength and board[x + L + c][y]): # collect extra characters
-                        word.append(board[x + L + c][y])
-                        c += 1
-            else:
-                if front:
-                    if (x == 0 and board[x + 1][y]) \
-                    or (x == boardLength - 1 and board[x - 1][y]) \
-                    or (x in range(1, boardLength - 1 )
-                    and (board[x + 1][y] or board[x - 1][y])): # resolve adjacent conflicts (Down/front)
-                        _x = x
-                        while (_x > 0 and board[_x - 1][y]):
-                            _x -= 1
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck( (_x, y), True):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
-                    while (y > 0 and board[x][y - 1]): # collect extra characters
-                        y -= 1
-                        word.insert(0, board[x][y])
-                else:
-                    L = len(word)
-                    if (x == 0 and board[x + 1][y + L - 1]) \
-                    or (x == boardLength - 1 and board[x - 1][y + L - 1]) \
-                    or (x in range(1, boardLength - 1 )
-                    and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/front)
-                        _x = x
-                        while (_x > 0 and board[_x - 1][y + L - 1]):
-                            _x -= 1
-                        valid = True
-                        board[x][y + L - 1], temp = word[-1], board[x][y + L - 1]
-                        if not wordCheck( (_x, y + L - 1), True):
-                            valid = False
-                        board[x][y + L - 1] = temp
-                        if not valid:
-                            continue
-                    c = 0
-                    while (y + L + c < boardLength and board[x][y + L + c]): # collect extra characters
-                        word.append(board[x][y + L + c])
-                        c += 1
-
-            key = ''.join(word)
-            if not key in subs:
-                continue
-            ref = subs[key]
-
-            if ref[0]: # check word
-                tryScore = scoreWord(word, (x,y), across)
-                if tryScore > bestScore:
-                    bestScore = tryScore
-                    bestPlay = (word, (x,y), across)
-
-            for char in pool: # recurse:
-                if char in ref[1] or char in ref[2]:
-                    remainder = list(pool)
-                    remainder.remove(char)
-                    L = len(word)
-                    if across:
-                        if x > 0 and char in ref[1]:
-                            stack.append( ([char] + word, (x - 1, y), True, remainder) )
-                        if x + L - 1 < n - 1 and char in ref[2]:
-                            stack.append( (word + [char], (x, y), False, remainder) )
-                    else:
-                        if y > 0 and char in ref[1]:
-                            stack.append( ([char] + word, (x, y - 1), True, remainder) )
-                        if y + L - 1 < n - 1 and char in ref[2]:
-                            stack.append( (word + [char], (x, y), False, remainder) )
-
-    return list(bestPlay), bestScore
 
 def getBestPlays(hand, m):
     """
@@ -531,7 +382,7 @@ def getBestPlays(hand, m):
                         board[x][y] = temp
                         if not valid:
                             continue
-                    while (x > 0 and board[x - 1][y]): # collect extra characters
+                    while (x > 0 and board[x - 1][y]): # collect extra characters in front
                         x -= 1
                         word.insert(0, board[x][y])
                 else:
@@ -551,7 +402,7 @@ def getBestPlays(hand, m):
                         if not valid:
                             continue
                     c = 0
-                    while (x + L + c < n and board[x + L + c][y]): # collect extra characters
+                    while (x + L + c < n and board[x + L + c][y]): # collect extra characters behind
                         word.append(board[x + L + c][y])
                         c += 1
             else:
@@ -570,7 +421,7 @@ def getBestPlays(hand, m):
                         board[x][y] = temp
                         if not valid:
                             continue
-                    while (y > 0 and board[x][y - 1]): # collect extra characters
+                    while (y > 0 and board[x][y - 1]): # collect extra characters in front
                         y -= 1
                         word.insert(0, board[x][y])
                 else:
@@ -578,7 +429,7 @@ def getBestPlays(hand, m):
                     if (x == 0 and board[x + 1][y + L - 1]) \
                     or (x == n - 1 and board[x - 1][y + L - 1]) \
                     or (x in range(1, n - 1 )
-                    and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/front)
+                    and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/back)
                         _x = x
                         while (_x > 0 and board[_x - 1][y + L - 1]):
                             _x -= 1
@@ -590,7 +441,7 @@ def getBestPlays(hand, m):
                         if not valid:
                             continue
                     c = 0
-                    while (y + L + c < n and board[x][y + L + c]): # collect extra characters
+                    while (y + L + c < n and board[x][y + L + c]): # collect extra behind
                         word.append(board[x][y + L + c])
                         c += 1
 
@@ -624,6 +475,7 @@ def getBestPlays(hand, m):
                             stack.append( (word + [char], (x, y), False, remainder) )
 
     return bestplays
+
 
 def main():
     global board
