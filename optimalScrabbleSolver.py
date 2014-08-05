@@ -332,9 +332,13 @@ def getBestPlays(hand, m):
         stack = []
 
         if not key:
-            for char in hand:
+            for char in set(hand):
                 remainder = list(hand)
                 remainder.remove(char)
+                if char == '*':
+                    blanked = True
+                    for _char in values:
+                        stack.append( (['*' + _char], (x, y), True, remainder) )
                 stack.append( ([char], (x, y), True, remainder) )
 
         elif not key in subs:
@@ -342,11 +346,11 @@ def getBestPlays(hand, m):
 
         else:
             ref = subs[key]
-            for char in hand:
+            L = len(word)
+            for char in set(hand):
                 if char in ref[1] or char in ref[2]:
                     remainder = list(hand)
                     remainder.remove(char)
-                    L = len(word)
                     if across:
                         if x > 0 and char in ref[1]:
                             stack.append( ([char] + word, (x - 1, y), True, remainder) )
@@ -357,6 +361,21 @@ def getBestPlays(hand, m):
                             stack.append( ([char] + word, (x, y - 1), True, remainder) )
                         if y + L - 1 < n - 1 and char in ref[2]:
                             stack.append( (word + [char], (x, y), False, remainder) )
+                elif char == '*':
+                    remainder = list(hand)
+                    remainder.remove('*')
+                    for _char in values:
+                        if across:
+                            if x > 0 and _char in ref[1]:
+                                stack.append( (['*' + _char] + word, (x - 1, y), True, list(remainder)) )
+                            if x + L - 1 < n - 1 and _char in ref[2]:
+                                stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
+                        else:
+                            if y > 0 and _char in ref[1]:
+                                stack.append( (['*' + _char] + word, (x, y - 1), True, list(remainder)) )
+                            if y + L - 1 < n - 1 and _char in ref[2]:
+                                stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
+
 
         while stack:
             frame = stack.pop()
@@ -458,11 +477,11 @@ def getBestPlays(hand, m):
                     bestplays.pop()
                     bestplays.insert((tryScore, word, (x, y), across))
 
-            for char in pool: # recurse:
+            L = len(word)
+            for char in set(pool): # recurse:
                 if char in ref[1] or char in ref[2]:
                     remainder = list(pool)
                     remainder.remove(char)
-                    L = len(word)
                     if across:
                         if x > 0 and char in ref[1]:
                             stack.append( ([char] + word, (x - 1, y), True, remainder) )
@@ -473,6 +492,20 @@ def getBestPlays(hand, m):
                             stack.append( ([char] + word, (x, y - 1), True, remainder) )
                         if y + L - 1 < n - 1 and char in ref[2]:
                             stack.append( (word + [char], (x, y), False, remainder) )
+                elif char == '*':
+                    remainder = list(pool)
+                    remainder.remove('*')
+                    for _char in values:
+                        if across:
+                            if x > 0 and _char in ref[1]:
+                                stack.append( (['*' + _char] + word, (x - 1, y), True, list(remainder)) )
+                            if x + L - 1 < n - 1 and _char in ref[2]:
+                                stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
+                        else:
+                            if y > 0 and _char in ref[1]:
+                                stack.append( (['*' + _char] + word, (x, y - 1), True, list(remainder)) )
+                            if y + L - 1 < n - 1 and _char in ref[2]:
+                                stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
 
     return bestplays
 
@@ -525,7 +558,8 @@ def main():
             print(' m - get best moves\n u - input a word on board\n'
                   ' r - remove a character\n d - display current board\n'
                   ' s - display specials\n c - clear the board\n'
-                  ' e - exit gracefully\n h - list of commands')
+                  ' e - exit gracefully\n h - list of commands\n'
+                  ' blank characters are \'*\'')
 
 if __name__ == '__main__':
     init()
