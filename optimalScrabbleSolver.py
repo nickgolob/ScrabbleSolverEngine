@@ -144,7 +144,7 @@ def init():
           'g':2, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
           'm':3, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
           's':1, 't':1, 'u':1, 'v':5, 'w':4, 'x':8,
-          'y':4, 'z':10}
+          'y':4, 'z':10, '*':0}
     boardLength = 15
     board = [[None for i in range(boardLength)] for j in range(boardLength)]
     specials = [[None for i in range(boardLength)] for j in range(boardLength)]
@@ -164,13 +164,16 @@ def displaySpecials():
             else:
                 print('   ', end='')
         print('')
-def displayBoard():
+def displayBoard2():
     p = lambda x : print(x, end='')
-    p('*')
+    for i in range(boardLength):
+        p(i - 2 if i - 2 in range(10) else ' ')
+    p('\n *')
     for i in range(boardLength):
         p('-')
-    p('*\n')
+    p(' *\n')
     for j in range(boardLength):
+        p(j if j in range(10) else ' ')
         p('|')
         for i in range(boardLength):
             if board[i][j]:
@@ -178,10 +181,18 @@ def displayBoard():
             else:
                 p(' ')
         p('|\n')
-    p('*')
+    p(' *')
     for i in range(boardLength):
         p('-')
     p('*\n')
+def displayBoard():
+    p = lambda *x : print(*x, sep='', end='')
+    p('    ', *[str(x).rjust(3) for x in range(boardLength)] + ['\n'])
+    p('   #', *[' --' for x in range(boardLength)] + [' #\n'])
+    for y in range(boardLength):
+        p(str(y).rjust(3), '|', *[board[x][y].rjust(3) if board[x][y] else '   ' for x in range(boardLength)] + [' |\n'])
+    p('   #', *[' --' for x in range(boardLength)] + [' #\n'])
+
 def addWord(word, coords, right):
     global board
     x, y = coords
@@ -200,7 +211,7 @@ def removeChar(coords):
 def scoreWord(word, coords, across):
     runningScore, sideScores, wordMod = 0, 0, 1
     x, y = coords
-    for char in word:
+    for char in map(lambda str : str[0], word):
         if not board[x][y]:
             thisWordMod, thisCharMod = 1, 1
             if specials[x][y] and specials[x][y][0] == '+':
@@ -255,7 +266,7 @@ def wordCheck(coords, right):
             x += 1
         else:
             y += 1
-    key = ''.join(word)
+    key = ''.join(word).replace('*', '')
     return key in subs and subs[key][0]
 
 def anchors():
@@ -464,13 +475,13 @@ def getBestPlays(hand, m):
                         word.append(board[x][y + L + c])
                         c += 1
 
-            key = ''.join(word)
+            key = ''.join(word).replace('*', '')
             if not key in subs:
                 continue
             ref = subs[key]
 
             if ref[0]: # check word
-                tryScore = scoreWord(word, (x,y), across)
+                tryScore = scoreWord(word, (x, y), across)
                 if bestplays.size < m:
                     bestplays.insert((tryScore, word, (x, y), across))
                 elif tryScore > bestplays.heap[0][0]:
