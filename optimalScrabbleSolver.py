@@ -2,14 +2,13 @@
 
 NEED:
 - blank character handling
-- extension word handling
-- bridge, handling
 """
 
 # GLOBALS: global values, boardLength, board, specials, dict
 
 ACROSS, DOWN = True, False
 
+""" auxiliary data structures: """
 class Heap():
     def __init__(self, compare):
         self.heap, self.size = [], 0
@@ -51,163 +50,147 @@ class Heap():
             else:
                 break
 
-""" board processing / setup : """
-def setupSpecials():
-    # Triple Words:
-    for i in range(0, boardLength, 7):
-        for j in range(0, boardLength, 7):
-            if not (i == 7 and j == 7):
-                specials[i][j] = '*3'
-    # Double Words:
-    for i in range(1, 5):
-        specials[i][i] = specials[i][boardLength - 1 - i] = \
-        specials[boardLength - 1 - i][i] = \
-        specials[boardLength - 1 - i][boardLength - 1 - i] = '*2'
-    #Triple Letters:
-    for i in range(1, boardLength, 4):
-        for j in range(1, boardLength, 4):
-            if not ((i == 1 and j == 1) or (i == 13 and j == 1) or
-                (i == 1 and j == 13) or (i == 13 and j == 13)):
-                specials[i][j] = '+3'
-    #Double Letters:
-    for i in range(3, boardLength, 8):
-        specials[0][i] = specials[i][0] = \
-        specials[boardLength - 1][i] = \
-        specials[i][boardLength - 1] = '+2'
-    specials[6][6] = specials[6][8] = \
-    specials[8][6] = specials[8][8] = \
-    specials[6][2] = specials[8][2] = \
-    specials[2][6] = specials[2][8] = \
-    specials[6][12] = specials[8][12] = \
-    specials[12][6] = specials[12][8] = \
-    specials[3][7] = specials[7][3] = \
-    specials[7][11] = specials[11][7] = '+2'
-def wordList():
-    with open('wordsEn.txt', 'r') as f:
-        content = {}
-        for line in f:
-            word = line.strip('\n')
-            if word and len(word) in range(2, 16):
-                content[word] = True
-    return content
-def substringProcess(dict):
-    subs = {}
-    for word in dict:
-        n = len(word)
-        for i in range(n):
-            for j in range(i + 1, n + 1):
-                if not word[i:j] in subs:
-                    if word[i:j] in dict:
-                        subs[word[i:j]] = (True, [], [])
+""" setup / intermediate managers: """
+class DictionaryManager():
+    """ static class
+        used to retrieve and write pre-processed dictionaries to disk
+    """
+    dataStore = 'subs.data'
+    def init(self):
+        pass
+    def reprocess(self, dictionarySource):
+        """ reprocesses the data on disk with a new base dictionary source """
+        self._saveDictionary(self._substringProcess(self._wordList(dictionarySource)))
+    def loadDictionary(self):
+        """ loads preprocessed data from disk, returns dictionary object """
+        import pickle
+        data = open(self.dataStore, 'rb')
+        subs = pickle.load(data)
+        data.close()
+        return subs
+    def _wordList(self, source):
+        with open(source, 'r') as f:
+            content = {}
+            for line in f:
+                word = line.strip('\n')
+                if word and len(word) in range(2, 16):
+                    content[word] = True
+        return content
+    def _substringProcess(self, dict):
+        subs = {}
+        for word in dict:
+            n = len(word)
+            for i in range(n):
+                for j in range(i + 1, n + 1):
+                    if not word[i:j] in subs:
+                        if word[i:j] in dict:
+                            subs[word[i:j]] = (True, [], [])
+                        else:
+                            subs[word[i:j]] = (False, [], [])
+                    ref = subs[word[i:j]]
+                    if 0 < i and not word[i - 1] in ref[1]:
+                        ref[1].append( word[i - 1] )
+                    if j < n and not word[j] in ref[2]:
+                        ref[2].append( word[j] )
+        return subs
+    def _saveDictionary(self, subDict):
+        import pickle
+        data = open(self.dataStore, 'wb')
+        pickle.dump(subDict, data)
+        data.close()
+
+class BoardManager():
+    boardLength = 15
+    dataStore = 'board.data'
+    def __init__(self):
+        pass
+    def getSpecials(self):
+        specials = [[None for i in range(boardLength)] for j in range(boardLength)]
+        # Triple Words:
+        for i in range(0, boardLength, 7):
+            for j in range(0, boardLength, 7):
+                if not (i == 7 and j == 7):
+                    specials[i][j] = '*3'
+        # Double Words:
+        for i in range(1, 5):
+            specials[i][i] = specials[i][boardLength - 1 - i] = \
+            specials[boardLength - 1 - i][i] = \
+            specials[boardLength - 1 - i][boardLength - 1 - i] = '*2'
+        #Triple Letters:
+        for i in range(1, boardLength, 4):
+            for j in range(1, boardLength, 4):
+                if not ((i == 1 and j == 1) or (i == 13 and j == 1) or
+                    (i == 1 and j == 13) or (i == 13 and j == 13)):
+                    specials[i][j] = '+3'
+        #Double Letters:
+        for i in range(3, boardLength, 8):
+            specials[0][i] = specials[i][0] = \
+            specials[boardLength - 1][i]  = \
+            specials[i][boardLength - 1]  = '+2'
+        specials[6][6]  = specials[6][8]  = \
+        specials[8][6]  = specials[8][8]  = \
+        specials[6][2]  = specials[8][2]  = \
+        specials[2][6]  = specials[2][8]  = \
+        specials[6][12] = specials[8][12] = \
+        specials[12][6] = specials[12][8] = \
+        specials[3][7]  = specials[7][3]  = \
+        specials[7][11] = specials[11][7] = '+2'
+
+        return specials
+    def saveBoard(self, board):
+        with open(self.dataStore, 'w') as f:
+            p = lambda x : print(x, file=f, end='')
+            for j in range(boardLength):
+                for i in range(boardLength):
+                    if board[i][j]:
+                        p(board[i][j])
                     else:
-                        subs[word[i:j]] = (False, [], [])
-                ref = subs[word[i:j]]
-                if 0 < i and not word[i - 1] in ref[1]:
-                    ref[1].append( word[i - 1] )
-                if j < n and not word[j] in ref[2]:
-                    ref[2].append( word[j] )
-    return subs
+                        p(' ')
+                p('\n')
+    def loadBoard(self):
+        import os.path
+        if os.path.isfile(self.dataStore):
+            content = [[j if j != ' ' else None for j in list(i.strip('\n'))]
+                       for i in open(self.dataStore).readlines()]
+            return list(map(list, zip(*content)))
+        else:
+            return [[None for i in range(boardLength)] for j in range(boardLength)]
+    def display(self, object):
+        n = self.boardLength
+        p = lambda *x : print(*x, sep='', end='')
+        p('    ', *[str(x).rjust(3) for x in range(n)] + ['\n'])
+        p('   #', *[' --' for x in range(n)] + [' #\n'])
+        for y in range(n):
+            p(str(y).rjust(3), '|',
+              *[object[x][y].rjust(3) if object[x][y] else '   ' for x in range(n)] + [' |\n'])
+        p('   #', *[' --' for x in range(n)] + [' #\n'])
+    def addWord(self, board, word, coords, right):
+        x, y = coords
+        for i, j in enumerate(word):
+            if right:
+                board[x + i][y] = j
+            else:
+                board[x][y + i] = j
+    def removeSection(self, board, coords, length, right):
+        self.addWord(board, [None for i in range(length)], coords, right)
+    def removeChar(self, board, coords):
+        x, y = coords
+        board[x][y] = None
 
-def saveDictionary():
-    import pickle
-    data = open('subs.data', 'wb')
-    pickle.dump(subs, data)
-    data.close()
-def loadDictionary():
-    import pickle
-    data = open('subs2.data', 'rb')
-    subs = pickle.load(data)
-    data.close()
-    return subs
-
-def saveBoard():
-    with open(tempFile, 'w') as f:
-        p = lambda x : print(x, file=f, end='')
-        for j in range(boardLength):
-            for i in range(boardLength):
-                if board[i][j]:
-                    p(board[i][j])
-                else:
-                    p(' ')
-            p('\n')
-def loadBoard():
-    import os.path
-    if os.path.isfile(tempFile):
-        content = [[j if j != ' ' else None for j in list(i.strip('\n'))]
-                   for i in open(tempFile).readlines()]
-        return list(map(list, zip(*content)))
-    else:
-        return [[None for i in range(boardLength)] for j in range(boardLength)]
 def init():
-    global values, boardLength, board, specials, dict, tempFile, subs
+    global values, boardLength, board, specials, subs
+
     values = {'a':1, 'b':3, 'c':3, 'd':2, 'e':1, 'f':4,
           'g':2, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
           'm':3, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
           's':1, 't':1, 'u':1, 'v':5, 'w':4, 'x':8,
           'y':4, 'z':10, '*':0}
-    boardLength = 15
-    board = [[None for i in range(boardLength)] for j in range(boardLength)]
-    specials = [[None for i in range(boardLength)] for j in range(boardLength)]
-    setupSpecials()
-    dict = wordList()
-    subs = loadDictionary()
+    boardLength = boardController.boardLength
+    board = boardController.loadBoard()
+    specials = boardController.getSpecials()
+    subs = DictionaryManager().loadDictionary()
 
-    tempFile = 'scrabbleTemp.out'
-    board = loadBoard() # load from memory
-init()
-
-def displaySpecials():
-    for i in range(boardLength):
-        for j in range(boardLength):
-            if specials[i][j]:
-                print(specials[i][j].rjust(3), end='')
-            else:
-                print('   ', end='')
-        print('')
-def displayBoard2():
-    p = lambda x : print(x, end='')
-    for i in range(boardLength):
-        p(i - 2 if i - 2 in range(10) else ' ')
-    p('\n *')
-    for i in range(boardLength):
-        p('-')
-    p(' *\n')
-    for j in range(boardLength):
-        p(j if j in range(10) else ' ')
-        p('|')
-        for i in range(boardLength):
-            if board[i][j]:
-                p(board[i][j])
-            else:
-                p(' ')
-        p('|\n')
-    p(' *')
-    for i in range(boardLength):
-        p('-')
-    p('*\n')
-def displayBoard():
-    p = lambda *x : print(*x, sep='', end='')
-    p('    ', *[str(x).rjust(3) for x in range(boardLength)] + ['\n'])
-    p('   #', *[' --' for x in range(boardLength)] + [' #\n'])
-    for y in range(boardLength):
-        p(str(y).rjust(3), '|', *[board[x][y].rjust(3) if board[x][y] else '   ' for x in range(boardLength)] + [' |\n'])
-    p('   #', *[' --' for x in range(boardLength)] + [' #\n'])
-
-def addWord(word, coords, right):
-    global board
-    x, y = coords
-    for i, j in enumerate(word):
-        if right:
-            board[x + i][y] = j
-        else:
-            board[x][y + i] = j
-def removeChar(coords):
-    global board
-    x, y = coords
-    board[x][y] = None
-
-
-""" solvers : """
+""" solvers: """
 def scoreWord(word, coords, across):
     runningScore, sideScores, wordMod = 0, 0, 1
     x, y = coords
@@ -327,6 +310,18 @@ def anchors():
                     memos.append((x + 1, y, False))
     return content
 
+def adjecentCheck(normalizedCoords, boardRef):
+    n = boardLength
+    i, j = normalizedCoords
+    if (i == 0 and boardRef(i + 1, j)) \
+    or (i == n - 1 and boardRef(i - 1, j)) \
+    or (i in range(1, n - 1 )
+    and (boardRef(i + 1, j) or boardRef(i - 1, j))):
+        while (i > 0 and boardRef(i - 1, j)):
+            i -= 1
+        return True, (i, j)
+    return False, (None, None)
+
 def getBestPlays(hand, m):
     """
     :param hand: playable characters in hand
@@ -337,11 +332,15 @@ def getBestPlays(hand, m):
     bestplays = Heap(lambda x, y : x[0] < y[0]) # min-heap
     memos = []
 
+    # Get all possible start locations
     allAnchors = anchors()
     for word, (x, y), across in allAnchors:
+
+        # initialize stack
         key = ''.join(word)
         stack = []
 
+        # blank start location:
         if not key:
             for char in set(hand):
                 remainder = list(hand)
@@ -352,9 +351,11 @@ def getBestPlays(hand, m):
                         stack.append( (['*' + _char], (x, y), True, remainder) )
                 stack.append( ([char], (x, y), True, remainder) )
 
+        # word isnt possible:
         elif not key in subs:
             continue
 
+        # possible word:
         else:
             ref = subs[key]
             L = len(word)
@@ -387,100 +388,74 @@ def getBestPlays(hand, m):
                             if y + L - 1 < n - 1 and _char in ref[2]:
                                 stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
 
-
+        # build words
         while stack:
             frame = stack.pop()
             word, (x, y), front, pool = frame
 
+            # memoization check:
             if (word, (x, y), across) in memos:
                 continue
             memos.append((word, (x, y), across))
 
-            if across:
-                if front:
-                    if (y == 0 and board[x][y+1]) \
-                    or (y == n - 1 and board[x][y-1]) \
-                    or (y in range(1, n - 1 )
-                    and (board[x][y+1] or board[x][y-1])): # resolve adjacent conflicts (Right/front)
-                        _y = y
-                        while (_y > 0 and board[x][_y - 1]):
-                            _y -= 1
+            L = len(word)
+
+            if front:
+                if across:
+                    check, (_y, _x) = adjecentCheck((y, x), lambda y, x : board[x][y])
+                    if check:
                         valid = True
                         board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck( (x, _y), False):
+                        if not wordCheck((_x, _y), False):
                             valid = False
                         board[x][y] = temp
                         if not valid:
                             continue
-                    while (x > 0 and board[x - 1][y]): # collect extra characters in front
-                        x -= 1
-                        word.insert(0, board[x][y])
                 else:
-                    L = len(word)
-                    if (y == 0 and board[x + L - 1][y + 1]) \
-                    or (y == n - 1 and board[x + L - 1][y - 1]) \
-                    or (y in range(1, n - 1)
-                    and (board[x + L - 1][y + 1] or board[x + L - 1][y - 1])): # resolve adjacent conflicts (Right/back)
-                        _y = y
-                        while (_y > 0 and board[x + L - 1][_y - 1]):
-                            _y -= 1
+                    check, (_x, _y) = adjecentCheck((x, y), lambda x, y : board[x][y])
+                    if check:
                         valid = True
-                        board[x + L - 1][y], temp = word[-1], board[x + L - 1][y]
-                        if not wordCheck( (x + L - 1, _y), False):
+                        board[x][y], temp = word[0], board[x][y]
+                        if not wordCheck((_x, _y), True):
                             valid = False
-                        board[x + L - 1][y] = temp
+                        board[x][y] = temp
                         if not valid:
                             continue
-                    c = 0
-                    while (x + L + c < n and board[x + L + c][y]): # collect extra characters behind
-                        word.append(board[x + L + c][y])
-                        c += 1
+                while (y > 0 and board[x][y - 1]): # collect extra characters in front
+                    y -= 1
+                    word.insert(0, board[x][y])
             else:
-                if front:
-                    if (x == 0 and board[x + 1][y]) \
-                    or (x == n - 1 and board[x - 1][y]) \
-                    or (x in range(1, n - 1 )
-                    and (board[x + 1][y] or board[x - 1][y])): # resolve adjacent conflicts (Down/front)
-                        _x = x
-                        while (_x > 0 and board[_x - 1][y]):
-                            _x -= 1
+                if across:
+                    check, (_y, _x) = adjecentCheck((y, x + L - 1), lambda y, x : board[x][y])
+                    if check:
                         valid = True
                         board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck( (_x, y), True):
+                        if not wordCheck((_x, _y), False):
                             valid = False
                         board[x][y] = temp
                         if not valid:
                             continue
-                    while (y > 0 and board[x][y - 1]): # collect extra characters in front
-                        y -= 1
-                        word.insert(0, board[x][y])
                 else:
-                    L = len(word)
-                    if (x == 0 and board[x + 1][y + L - 1]) \
-                    or (x == n - 1 and board[x - 1][y + L - 1]) \
-                    or (x in range(1, n - 1 )
-                    and (board[x + 1][y + L - 1] or board[x - 1][y + L - 1])): # resolve adjacent conflicts (Down/back)
-                        _x = x
-                        while (_x > 0 and board[_x - 1][y + L - 1]):
-                            _x -= 1
+                    check, (_x, _y) = adjecentCheck((x, y + L - 1), lambda x, y : board[x][y])
+                    if check:
                         valid = True
-                        board[x][y + L - 1], temp = word[-1], board[x][y + L - 1]
-                        if not wordCheck( (_x, y + L - 1), True):
+                        board[x][y], temp = word[0], board[x][y]
+                        if not wordCheck((_x, _y), True):
                             valid = False
-                        board[x][y + L - 1] = temp
+                        board[x][y] = temp
                         if not valid:
                             continue
-                    c = 0
-                    while (y + L + c < n and board[x][y + L + c]): # collect extra behind
-                        word.append(board[x][y + L + c])
-                        c += 1
+                while (y + L < n and board[x][y + L]): # collect extra behind
+                    word.append(board[x][y + L])
+                    L += 1
 
             key = ''.join(word).replace('*', '')
             if not key in subs:
                 continue
             ref = subs[key]
 
-            if ref[0]: # check word
+            # word check / scoring
+            if ref[0] and L > 1:
                 tryScore = scoreWord(word, (x, y), across)
                 if bestplays.size < m:
                     bestplays.insert((tryScore, word, (x, y), across))
@@ -488,8 +463,8 @@ def getBestPlays(hand, m):
                     bestplays.pop()
                     bestplays.insert((tryScore, word, (x, y), across))
 
-            L = len(word)
-            for char in set(pool): # recurse:
+            # recurse off of word
+            for char in set(pool):
                 if char in ref[1] or char in ref[2]:
                     remainder = list(pool)
                     remainder.remove(char)
@@ -520,7 +495,6 @@ def getBestPlays(hand, m):
 
     return bestplays
 
-
 def main():
     global board
     while True:
@@ -540,30 +514,30 @@ def main():
             x = input('x coordinate: ')
             y = input('y coordinate: ')
             right = input('justification: ')
-            addWord(word, (int(x), int(y)), True if right[0] == 'r' else False)
-            saveBoard()
+            boardController.addWord(board, word, (int(x), int(y)), True if right[0] == 'r' else False)
+            boardController.saveBoard(board)
         elif action == 'r':
             x = input('x coordinate: ')
             y = input('y coordinate: ')
-            removeChar((int(x), int(y)))
-            saveBoard()
+            boardController.removeChar(board, (int(x), int(y)))
+            boardController.saveBoard(board)
         elif action == 'd': # display board
             print('')
-            displayBoard()
+            boardController.display(board)
         elif action == 's': # display specials
             print('')
-            displaySpecials()
+            boardController.display(specials)
         elif action == 'c': # clear board
             confirm = input('you sure?: ')
             if confirm[0] == 'y':
                 board = [[None for i in range(boardLength)] for j in range(boardLength)]
                 import os
                 try:
-                    os.remove(tempFile)
+                    os.remove(boardController.dataStore)
                 except OSError:
                     pass
         elif action == 'e': # exit
-            saveBoard()
+            boardController.saveBoard(board)
             return
         elif action == 'h':
             print(' m - get best moves\n u - input a word on board\n'
@@ -573,5 +547,6 @@ def main():
                   ' blank characters are \'*\'')
 
 if __name__ == '__main__':
+    boardController = BoardManager()
     init()
     main()
