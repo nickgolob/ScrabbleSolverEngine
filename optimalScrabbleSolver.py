@@ -1,15 +1,17 @@
 """
+Scrabble solver. Returns the best possible play (in terms
+of number of points) given a board state, and a hand of tiles.
 
-NEED:
-- blank character handling
+TODO:
+verify blank character handling is correct
 """
 
-# GLOBALS: global values, boardLength, board, specials, dict
-
+# GLOBALS: values, boardLength, board, specials, subs
 ACROSS, DOWN = True, False
 
 """ auxiliary data structures: """
 class Heap():
+    """ Heap that only supports 'pop' removal """
     def __init__(self, compare):
         self.heap, self.size = [], 0
         self.compare = compare
@@ -178,6 +180,7 @@ class BoardManager():
         board[x][y] = None
 
 def init():
+    """ sets up global variables for program """
     global values, boardLength, board, specials, subs
 
     values = {'a':1, 'b':3, 'c':3, 'd':2, 'e':1, 'f':4,
@@ -190,7 +193,7 @@ def init():
     specials = boardController.getSpecials()
     subs = DictionaryManager().loadDictionary()
 
-""" solvers: """
+""" solver utilities: """
 def scoreWord(word, coords, across):
     runningScore, sideScores, wordMod = 0, 0, 1
     x, y = coords
@@ -203,7 +206,7 @@ def scoreWord(word, coords, across):
                 thisWordMod = int(specials[x][y][1])
                 wordMod *= thisWordMod
             runningScore += values[char] * thisCharMod
-            # check adjacencies:
+            # get adjacent word completions:
             if across:
                 if (y > 0 and board[x][y - 1]) or \
                 (y < boardLength  - 1 and board[x][y + 1]): # check vertical intersect
@@ -322,6 +325,7 @@ def adjecentCheck(normalizedCoords, boardRef):
         return True, (i, j)
     return False, (None, None)
 
+""" main solver: """
 def getBestPlays(hand, m):
     """
     :param hand: playable characters in hand
@@ -332,11 +336,11 @@ def getBestPlays(hand, m):
     bestplays = Heap(lambda x, y : x[0] < y[0]) # min-heap
     memos = []
 
-    # Get all possible start locations
+    # Get all possible start locations:
     allAnchors = anchors()
     for word, (x, y), across in allAnchors:
 
-        # initialize stack
+        # initialize stack:
         key = ''.join(word)
         stack = []
 
@@ -400,61 +404,43 @@ def getBestPlays(hand, m):
 
             L = len(word)
 
+            # check adjacent word conflicts:
             if front:
                 if across:
                     check, (_y, _x) = adjecentCheck((y, x), lambda y, x : board[x][y])
-                    if check:
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck((_x, _y), False):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
                 else:
                     check, (_x, _y) = adjecentCheck((x, y), lambda x, y : board[x][y])
-                    if check:
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck((_x, _y), True):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
+            else:
+                if across:
+                    check, (_y, _x) = adjecentCheck((y, x + L - 1), lambda y, x : board[x][y])
+                else:
+                    check, (_x, _y) = adjecentCheck((x, y + L - 1), lambda x, y : board[x][y])
+            if check:
+                valid = True
+                board[x][y], temp = word[0], board[x][y]
+                if not wordCheck((_x, _y), False):
+                    valid = False
+                board[x][y] = temp
+                if not valid:
+                    continue
+
+            # collect peripheral characters:
+            if front:
                 while (y > 0 and board[x][y - 1]): # collect extra characters in front
                     y -= 1
                     word.insert(0, board[x][y])
             else:
-                if across:
-                    check, (_y, _x) = adjecentCheck((y, x + L - 1), lambda y, x : board[x][y])
-                    if check:
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck((_x, _y), False):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
-                else:
-                    check, (_x, _y) = adjecentCheck((x, y + L - 1), lambda x, y : board[x][y])
-                    if check:
-                        valid = True
-                        board[x][y], temp = word[0], board[x][y]
-                        if not wordCheck((_x, _y), True):
-                            valid = False
-                        board[x][y] = temp
-                        if not valid:
-                            continue
-                while (y + L < n and board[x][y + L]): # collect extra behind
+                while (y + L < n and board[x][y + L]): # collect extra characters off back
                     word.append(board[x][y + L])
                     L += 1
 
+            # check if word is still feasible:
             key = ''.join(word).replace('*', '')
             if not key in subs:
                 continue
             ref = subs[key]
 
-            # word check / scoring
+            # word check / scoring:
             if ref[0] and L > 1:
                 tryScore = scoreWord(word, (x, y), across)
                 if bestplays.size < m:
@@ -463,7 +449,7 @@ def getBestPlays(hand, m):
                     bestplays.pop()
                     bestplays.insert((tryScore, word, (x, y), across))
 
-            # recurse off of word
+            # recurse off of word:
             for char in set(pool):
                 if char in ref[1] or char in ref[2]:
                     remainder = list(pool)
