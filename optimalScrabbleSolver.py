@@ -168,11 +168,25 @@ class BoardManager():
         p('   #', *[' --' for x in range(n)] + [' #\n'])
     def addWord(self, board, word, coords, right):
         x, y = coords
+        k = 0
+        blank = False
         for i, j in enumerate(word):
-            if right:
-                board[x + i][y] = j
+            if j == '*':
+                blank = True
+                k += 1
+                continue
+            elif right:
+                if blank:
+                    blank = False
+                    board[x + i - k][y] = '*' + j
+                else:
+                    board[x + i - k][y] = j
             else:
-                board[x][y + i] = j
+                if blank:
+                    blank = False
+                    board[x][y + i - k] = '*' + j
+                else:
+                    board[x][y + i - k] = j
     def removeSection(self, board, coords, length, right):
         self.addWord(board, [None for i in range(length)], coords, right)
     def removeChar(self, board, coords):
@@ -256,6 +270,7 @@ def wordCheck(coords, right):
     return key in subs and subs[key][0]
 
 def anchors():
+    """ get all possible starting locations for word building """
     n = boardLength
     if not board[n // 2][n // 2]: # first move
         return [([], (n // 2, n // 2), True),
@@ -313,17 +328,30 @@ def anchors():
                     memos.append((x + 1, y, False))
     return content
 
-def adjecentCheck(normalizedCoords, boardRef):
-    n = boardLength
-    i, j = normalizedCoords
+def adjecentCheck(char, coords, inverted):
+    (x, y), n = coords, boardLength
+    if not inverted:
+        boardRef = lambda x, y : board[x][y]
+        i, j = x, y
+    else:
+        boardRef = lambda y, x : board[x][y]
+        j, i = x, y
     if (i == 0 and boardRef(i + 1, j)) \
     or (i == n - 1 and boardRef(i - 1, j)) \
     or (i in range(1, n - 1 )
     and (boardRef(i + 1, j) or boardRef(i - 1, j))):
         while (i > 0 and boardRef(i - 1, j)):
             i -= 1
-        return True, (i, j)
-    return False, (None, None)
+        if inverted:
+            i, j = j, i
+        valid = True
+        board[x][y] = char
+        if not wordCheck((i, j), not inverted):
+            valid = False
+        board[x][y] = None
+        return valid
+    else:
+        return True
 
 """ main solver: """
 def getBestPlays(hand, m):
@@ -395,6 +423,7 @@ def getBestPlays(hand, m):
         # build words
         while stack:
             frame = stack.pop()
+            print(frame, across)
             word, (x, y), front, pool = frame
 
             # memoization check:
@@ -407,32 +436,40 @@ def getBestPlays(hand, m):
             # check adjacent word conflicts:
             if front:
                 if across:
-                    check, (_y, _x) = adjecentCheck((y, x), lambda y, x : board[x][y])
+                    valid = adjecentCheck(word[0], (x, y), True)
                 else:
-                    check, (_x, _y) = adjecentCheck((x, y), lambda x, y : board[x][y])
+                    valid = adjecentCheck(word[0], (x, y), False)
             else:
                 if across:
-                    check, (_y, _x) = adjecentCheck((y, x + L - 1), lambda y, x : board[x][y])
+                    valid = adjecentCheck(word[-1], (x + L - 1, y), True)
                 else:
-                    check, (_x, _y) = adjecentCheck((x, y + L - 1), lambda x, y : board[x][y])
-            if check:
-                valid = True
-                board[x][y], temp = word[0], board[x][y]
-                if not wordCheck((_x, _y), False):
-                    valid = False
-                board[x][y] = temp
-                if not valid:
-                    continue
+                    valid = adjecentCheck(word[-1], (x, y + L - 1), False)
+            if not valid:
+                continue
 
             # collect peripheral characters:
-            if front:
-                while (y > 0 and board[x][y - 1]): # collect extra characters in front
-                    y -= 1
-                    word.insert(0, board[x][y])
-            else:
-                while (y + L < n and board[x][y + L]): # collect extra characters off back
-                    word.append(board[x][y + L])
-                    L += 1
+            if front or L == 1:
+                # collect extra characters in front
+                if across:
+                    while (across and x > 0 and board[x - 1][y]):
+                        x -= 1
+                        word.insert(0, board[x][y])
+                        L += 1
+                else:
+                    while (y > 0 and board[x][y - 1]):
+                        y -= 1
+                        word.insert(0, board[x][y])
+                        L += 1
+            if not front or L == 1:
+                # collect extra characters off back
+                if across:
+                    while (x + L < n and board[x + L][y]):
+                        word.append(board[x + L][y])
+                        L += 1
+                else:
+                    while (y + L < n and board[x][y + L]):
+                        word.append(board[x][y + L])
+                        L += 1
 
             # check if word is still feasible:
             key = ''.join(word).replace('*', '')
@@ -495,6 +532,19 @@ def main():
             for play in bestplays.heap:
                 print(' "{}" starting at ({}, {}), {}, {} points'.format(
                     ''.join(play[1]), play[2][0], play[2][1], 'rightward' if play[3] else 'downward', int(play[0])))
+
+        elif action == 'v':
+            hand = input('input hand: ').lower()
+            m = input('# of plays: ')
+            print('processing...')
+            bestplays = getBestPlays(list(hand), int(m))
+            if bestplays.size == 0:
+                print('no available plays now')
+            for play in bestplays.heap:
+
+                print(' "{}" starting at ({}, {}), {}, {} points'.format(
+                    ''.join(play[1]), play[2][0], play[2][1], 'rightward' if play[3] else 'downward', int(play[0])))
+
         elif action == 'u': # update board
             word = input('word: ').lower()
             x = input('x coordinate: ')
@@ -533,6 +583,9 @@ def main():
                   ' blank characters are \'*\'')
 
 if __name__ == '__main__':
+    #j = DictionaryManager()
+    #j.reprocess('corncob_lowercase.txt')
+
     boardController = BoardManager()
     init()
     main()
