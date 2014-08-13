@@ -11,7 +11,9 @@ ACROSS, DOWN = True, False
 
 """ auxiliary data structures: """
 class Heap():
-    """ Heap that only supports 'pop' removal """
+    """ Heap that only supports 'pop' removal,
+        can return a heap sorted generator of
+        its payload, at the expense of its life. """
     def __init__(self, compare):
         self.heap, self.size = [], 0
         self.compare = compare
@@ -22,15 +24,23 @@ class Heap():
             self.compare = lambda x, y: x > y
         """
     def insert(self, element):
+        """ insert element into heap """
         self.size += 1
         self.heap.append(element)
         self._percolateUp()
     def pop(self):
+        """ pop top element of heap """
         self.size -= 1
         self.heap[0], self.heap[-1] = self.heap[-1], self.heap[0]
         x = self.heap.pop()
         self._percolateDown()
         return x
+    def heapSortGenerator(self):
+        """ returns a generator yielding the elements of
+            the heap sorted, in reverse order. The heap
+            will be destroyed in the process. """
+        while self.heap:
+            yield self.pop()
     def _percolateUp(self):
         x = self.size - 1
         while x > 0:
@@ -423,7 +433,7 @@ def getBestPlays(hand, m):
         # build words
         while stack:
             frame = stack.pop()
-            print(frame, across)
+            #print(frame, across)
             word, (x, y), front, pool = frame
 
             # memoization check:
@@ -518,69 +528,105 @@ def getBestPlays(hand, m):
 
     return bestplays
 
+def outputBestPlays(bestplays):
+    if bestplays.size == 0:
+        print('no available plays now')
+    for play in bestplays.heapSortGenerator():
+        score, word, (x, y), across = play[0], play[1], play[2], play[3]
+        adjacents = []
+        for char in word:
+            if not board[x][y]:
+                if across:
+                    if (y > 0 and board[x][y - 1]) or \
+                    (y < boardLength  - 1 and board[x][y + 1]): # check vertical intersect
+                        adjacents.append([char])
+                        j = y
+                        while (j > 0 and board[x][j - 1]):
+                            j -= 1
+                            adjacents[-1].insert(0, board[x][j])
+                        j = y
+                        while (j < boardLength - 1 and board[x][j + 1]):
+                            j += 1
+                            adjacents[-1].append(board[x][j])
+                else:
+                    if (x > 0 and board[x - 1][y]) or \
+                    (x < boardLength - 1 and board[x + 1][y]): # check horizontal intersect
+                        adjacents.append([char])
+                        i = x
+                        while (i > 0 and board[i - 1][y]):
+                            i -= 1
+                            adjacents[-1].insert(0, board[i][y])
+                        i = x
+                        while (i < boardLength - 1 and board[i + 1][y]):
+                            i += 1
+                            adjacents[-1].append(board[i][y])
+            if across:
+                x += 1
+            else:
+                y += 1
+        print(' "{}" starting at ({}, {}), {}, for {} points'.format(
+            ''.join(word), x, y, 'rightward' if across else 'downward', score))
+        if adjacents:
+            print('   RESULTING: {}'.format(', '.join( (''.join(i) for i in adjacents) ) ))
+
 def main():
     global board
     while True:
         action = input('\nwhat up: ')
-        if action == 'm': # get move
-            hand = input('input hand: ').lower()
-            m = input('# of plays: ')
-            print('processing...')
-            bestplays = getBestPlays(list(hand), int(m))
-            if bestplays.size == 0:
-                print('no available plays now')
-            for play in bestplays.heap:
-                print(' "{}" starting at ({}, {}), {}, {} points'.format(
-                    ''.join(play[1]), play[2][0], play[2][1], 'rightward' if play[3] else 'downward', int(play[0])))
-
-        elif action == 'v':
-            hand = input('input hand: ').lower()
-            m = input('# of plays: ')
-            print('processing...')
-            bestplays = getBestPlays(list(hand), int(m))
-            if bestplays.size == 0:
-                print('no available plays now')
-            for play in bestplays.heap:
-
-                print(' "{}" starting at ({}, {}), {}, {} points'.format(
-                    ''.join(play[1]), play[2][0], play[2][1], 'rightward' if play[3] else 'downward', int(play[0])))
-
-        elif action == 'u': # update board
-            word = input('word: ').lower()
-            x = input('x coordinate: ')
-            y = input('y coordinate: ')
-            right = input('justification: ')
-            boardController.addWord(board, word, (int(x), int(y)), True if right[0] == 'r' else False)
-            boardController.saveBoard(board)
-        elif action == 'r':
-            x = input('x coordinate: ')
-            y = input('y coordinate: ')
-            boardController.removeChar(board, (int(x), int(y)))
-            boardController.saveBoard(board)
-        elif action == 'd': # display board
-            print('')
-            boardController.display(board)
-        elif action == 's': # display specials
-            print('')
-            boardController.display(specials)
-        elif action == 'c': # clear board
-            confirm = input('you sure?: ')
-            if confirm[0] == 'y':
-                board = [[None for i in range(boardLength)] for j in range(boardLength)]
-                import os
-                try:
-                    os.remove(boardController.dataStore)
-                except OSError:
-                    pass
-        elif action == 'e': # exit
-            boardController.saveBoard(board)
-            return
-        elif action == 'h':
-            print(' m - get best moves\n u - input a word on board\n'
-                  ' r - remove a character\n d - display current board\n'
-                  ' s - display specials\n c - clear the board\n'
-                  ' e - exit gracefully\n h - list of commands\n'
-                  ' blank characters are \'*\'')
+        try:
+            if action == 'm': # get move
+                hand = list(input('input hand: ').lower())
+                assert all( (i in values for i in hand) )
+                m = int(input('# of plays: '))
+                print('processing...')
+                outputBestPlays(getBestPlays(hand, m))
+            elif action == 'u': # update board
+                word = input('word: ').lower()
+                assert all( (i in values for i in word) )
+                x = int(input('x coordinate: '))
+                y = int(input('y coordinate: '))
+                justif = input('justification: ')
+                assert justif == 'r' or justif == 'd'
+                boardController.addWord(board, word, (x, y), True if justif == 'r' else False)
+                boardController.saveBoard(board)
+                print('updated successfully')
+            elif action == 'r': # remove word
+                x = int(input('x coordinate: '))
+                y = int(input('y coordinate: '))
+                L = int(input('length: '))
+                justif = input('justification: ')
+                assert justif == 'r' or justif == 'd'
+                boardController.removeSection(board, (x, y), L, True if justif == 'r' else False)
+                boardController.saveBoard(board)
+                print('removed successfully')
+            elif action == 'd': # display board
+                boardController.display(board)
+            elif action == 's': # display specials
+                boardController.display(specials)
+            elif action == 'c': # clear board
+                confirm = input('you sure?: ')
+                if confirm[0].lower() == 'y':
+                    board = [[None for i in range(boardLength)] for j in range(boardLength)]
+                    import os
+                    try:
+                        os.remove(boardController.dataStore)
+                    except OSError:
+                        pass
+            elif action == 'e': # exit
+                boardController.saveBoard(board)
+                return
+            elif action == 'h':
+                print('COMMANDS:\n'
+                      ' m - get best moves\n u - input a word on board\n'
+                      ' r - remove a section\n d - display current board\n'
+                      ' s - display specials\n c - clear the board\n'
+                      ' e - exit gracefully\n h - list of commands\n'
+                      'CONSTANTS:\n'
+                      ' r - rightward\n d - downward\n * - blank char')
+            else:
+                raise SyntaxError
+        except (AssertionError, ValueError, SyntaxError):
+            print('invalid input. input "h" for help menu.')
 
 if __name__ == '__main__':
     #j = DictionaryManager()
