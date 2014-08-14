@@ -528,6 +528,8 @@ def getBestPlays(hand, m):
 
     return bestplays
 
+
+""" USER I/O: """
 def outputBestPlays(bestplays):
     if bestplays.size == 0:
         print('no available plays now')
@@ -567,22 +569,28 @@ def outputBestPlays(bestplays):
         print(' "{}" starting at ({}, {}), {}, for {} points'.format(
             ''.join(word), x, y, 'rightward' if across else 'downward', score))
         if adjacents:
-            print('   RESULTING: {}'.format(', '.join( (''.join(i) for i in adjacents) ) ))
+            print('    RESULTING: {}'.format(', '.join( (''.join(i) for i in adjacents) ) ))
 
 def main():
+    from re import match
+    from datetime import datetime
     global board
     while True:
         action = input('\nwhat up: ')
         try:
             if action == 'm': # get move
-                hand = list(input('input hand: ').lower())
-                assert all( (i in values for i in hand) )
+                hand = input('input hand: ').lower()
+                assert match('^([a-z]|\*)+$', hand)
                 m = int(input('# of plays: '))
                 print('processing...')
-                outputBestPlays(getBestPlays(hand, m))
+                start = datetime.now()
+                outputBestPlays(getBestPlays(list(hand), m))
+                end = datetime.now()
+                elapsed = end - start
+                print(elapsed)
             elif action == 'u': # update board
                 word = input('word: ').lower()
-                assert all( (i in values for i in word) )
+                assert match('^(([a-z])|(\*[a-z]))+$', word)
                 x = int(input('x coordinate: '))
                 y = int(input('y coordinate: '))
                 justif = input('justification: ')
@@ -622,7 +630,7 @@ def main():
                       ' s - display specials\n c - clear the board\n'
                       ' e - exit gracefully\n h - list of commands\n'
                       'CONSTANTS:\n'
-                      ' r - rightward\n d - downward\n * - blank char')
+                      ' r - rightward\n d - downward\n * - blank char prefix')
             else:
                 raise SyntaxError
         except (AssertionError, ValueError, SyntaxError):
@@ -631,7 +639,7 @@ def main():
 if __name__ == '__main__':
     #j = DictionaryManager()
     #j.reprocess('corncob_lowercase.txt')
-
+    
     boardController = BoardManager()
     init()
     main()
