@@ -14,16 +14,16 @@ begins building characters off of that location, keeping track
 of whether or not the current string being constructed can be
 a valid word (i.e is a substring of a valid word), if not,
 the algo immediately quits processing the word and moves on. Also
-if a conflict arises with an adjecently intersecting word, the
+if a conflict arises with an adjacently intersecting word, the
 current string is dropped as well (a conflict arises when an
 intersecting string is not a valid word, not just an invalid
 substring). The algorithm memoizes states that it has tried,
-to alleviate redundent compuations. It finishes by returning the
+to alleviate redundant computations. It finishes by returning the
 "m" highest scoring placements resulting in valid words. A heap
 is used to track the "m" best plays.
 
 the primary data structure used for tracking substrings is a
-dictionary of all possible substrings occuring from the valid
+dictionary of all possible substrings occurring from the valid
 list of words. The values of the dictionary is a tuple,
 consisting of a boolean denoting whether the current substring
 is a valid word, and two lists denoting characters that may be
@@ -617,6 +617,7 @@ def outputBestPlays(bestplays):
 def main():
     from re import match
     from datetime import datetime
+    from timeit import timeit
     global board
     while True:
         action = input('\nwhat up: ')
