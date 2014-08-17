@@ -35,6 +35,9 @@ available chars).
 TODO:
 optimizations, experiment with different memoization hashKeys,
 integrate ACROSS/DOWN constants for readability.
+
+IMPLEMENT add word at playtime
+IMPLEMENT add/ban word reintegration to dictionary
 """
 
 # GLOBALS: values, boardLength, board, specials, subs
@@ -95,24 +98,16 @@ class Heap():
 
 """ setup / intermediate managers: """
 class DictionaryManager():
-    """ static class
-        used to retrieve and write pre-processed dictionaries to disk
-    """
-    dataStore = 'subs.data'
-    def init(self):
-        pass
-    def reprocess(self, dictionarySource):
+    """ used to retrieve and write pre-processed dictionaries to disk """
+    def __init__(self, dictionarySource):
+        from ntpath import basename, splitext
+        self.source = dictionarySource
+        self.dataStore = '{}.data'.format(splitext(basename(dictionarySource))[0])
+    def reprocess(self):
         """ reprocesses the data on disk with a new base dictionary source """
-        self._saveDictionary(self._substringProcess(self._wordList(dictionarySource)))
-    def loadDictionary(self):
-        """ loads preprocessed data from disk, returns dictionary object """
-        import pickle
-        data = open(self.dataStore, 'rb')
-        subs = pickle.load(data)
-        data.close()
-        return subs
-    def _wordList(self, source):
-        with open(source, 'r') as f:
+        self._saveDictionary(self._substringProcess(self._wordList()))
+    def _wordList(self):
+        with open(self.source, 'r') as f:
             content = {}
             for line in f:
                 word = line.strip('\n')
@@ -136,41 +131,68 @@ class DictionaryManager():
                     if j < n and not word[j] in ref[2]:
                         ref[2].append( word[j] )
         return subs
+    def loadDictionary(self):
+        """ loads preprocessed data from disk, returns dictionary object """
+        from pickle import load
+        from os import path
+        if not path.isfile(self.dataStore):
+            self.reprocess()
+        with open(self.dataStore, 'rb') as data:
+            subs = load(data)
+        return subs
     def _saveDictionary(self, subDict):
-        import pickle
-        data = open(self.dataStore, 'wb')
-        pickle.dump(subDict, data)
-        data.close()
+        from pickle import dump
+        with open(self.dataStore, 'wb') as data:
+            dump(subDict, data)
 
 class BoardManager():
     """ used to setup/load game constants """
     boardLength = 15
-    dataStore = 'board.data'
-    def __init__(self):
-        pass
-    def getSpecials(self):
-        specials = [[None for i in range(boardLength)] for j in range(boardLength)]
+    def __init__(self, original):
+        if original:
+            # game is classic scrabble
+            self.values = \
+                {'a':1, 'b':3, 'c':3, 'd':2, 'e':1, 'f':4,
+                'g':2, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
+                'm':3, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
+                's':1, 't':1, 'u':1, 'v':4, 'w':4, 'x':8,
+                'y':4, 'z':10, '*':0}
+            self.dataStore = 'boardClassic.data'
+            self.specials = self.getClassicSpecials()
+        else:
+            # game is words with friends
+            self.values = \
+                {'a':1, 'b':4, 'c':3, 'd':2, 'e':1, 'f':4,
+                'g':3, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
+                'm':3, 'n':2, 'o':1, 'p':3, 'q':10, 'r':1,
+                's':1, 't':1, 'u':1, 'v':5, 'w':4, 'x':8,
+                'y':4, 'z':10, '*':0}
+            self.dataStore = 'boardWWF.data'
+            self.specials = self.getWWFSpecials()
+    def getClassicSpecials(self):
+        n = self.boardLength
+        specials = [[None for i in range(n)] for j in range(n)]
         # Triple Words:
-        for i in range(0, boardLength, 7):
-            for j in range(0, boardLength, 7):
+        for i in range(0, n, 7):
+            for j in range(0, n, 7):
                 if not (i == 7 and j == 7):
                     specials[i][j] = '*3'
         # Double Words:
         for i in range(1, 5):
-            specials[i][i] = specials[i][boardLength - 1 - i] = \
-            specials[boardLength - 1 - i][i] = \
-            specials[boardLength - 1 - i][boardLength - 1 - i] = '*2'
+            specials[i][i] = specials[i][n - 1 - i] = \
+            specials[n - 1 - i][i] = \
+            specials[n - 1 - i][n - 1 - i] = '*2'
         #Triple Letters:
-        for i in range(1, boardLength, 4):
-            for j in range(1, boardLength, 4):
+        for i in range(1, n, 4):
+            for j in range(1, n, 4):
                 if not ((i == 1 and j == 1) or (i == 13 and j == 1) or
                     (i == 1 and j == 13) or (i == 13 and j == 13)):
                     specials[i][j] = '+3'
         #Double Letters:
-        for i in range(3, boardLength, 8):
+        for i in range(3, n, 8):
             specials[0][i] = specials[i][0] = \
-            specials[boardLength - 1][i]  = \
-            specials[i][boardLength - 1]  = '+2'
+            specials[n - 1][i]  = \
+            specials[i][n - 1]  = '+2'
         specials[6][6]  = specials[6][8]  = \
         specials[8][6]  = specials[8][8]  = \
         specials[6][2]  = specials[8][2]  = \
@@ -179,6 +201,37 @@ class BoardManager():
         specials[12][6] = specials[12][8] = \
         specials[3][7]  = specials[7][3]  = \
         specials[7][11] = specials[11][7] = '+2'
+
+        return specials
+    def getWWFSpecials(self):
+        n = self.boardLength
+        specials = [[None for i in range(n)] for j in range(n)]
+        # Triple Words:
+        for i in (3, 11):
+            specials[0][i] = specials[n - 1][i] = \
+            specials[i][0] = specials[i][n - 1] = '*3'
+        # double word:
+        for i in (5, 9):
+            specials[1][i] = specials[n - 2][i] = \
+            specials[i][1] = specials[i][n - 2] = '*2'
+        specials[7][3] = specials[7][11] = \
+        specials[3][7] = specials[11][7] = '*2'
+        # triple letter:
+        for i in (0, 3, 6):
+            specials[i][8 + i] = specials[i][6 - i] = \
+            specials[8 + i][i] = specials[n - 1 - i][8 + i] = '+3'
+        specials[5][5] = specials[9][5] = \
+        specials[5][9] = specials[9][9] = '+3'
+        # double letters:
+        for i in (0, 2):
+            specials[6 - i][4 + i] = specials[8 + i][4 + i] = \
+            specials[4 + i][8 + i] = specials[8 + i][10 - i] = \
+            specials[2 + i][4 - i] = specials[10 + i][2 + i] = \
+            specials[2 + i][10 + i] = specials[10 + i][12 - i] = \
+            specials[1 + i//2][2 - i//2] = \
+            specials[12 + i//2][1 + i//2] = \
+            specials[1 + i//2][12 + i//2] = \
+            specials[12 + i//2][13 - i//2] = '+2'
 
         return specials
     def saveBoard(self, board):
@@ -196,9 +249,17 @@ class BoardManager():
         if os.path.isfile(self.dataStore):
             content = [[j if j != ' ' else None for j in list(i.strip('\n'))]
                        for i in open(self.dataStore).readlines()]
+            for i in range(len(content)):
+                j = 0
+                while j < len(content[i]):
+                    if content[i][j] == '*':
+                        content[i].pop(j)
+                        content[i][j] = '*{}'.format(content[i][j])
+                    j += 1
             return list(map(list, zip(*content)))
         else:
             return [[None for i in range(boardLength)] for j in range(boardLength)]
+
     def display(self, object):
         n = self.boardLength
         p = lambda *x : print(*x, sep='', end='')
@@ -237,17 +298,22 @@ class BoardManager():
 
 def init():
     """ sets up global variables for program """
-    global values, boardLength, board, specials, subs
+    from os import path
+    global boardController, values, boardLength, board, specials, subs, illegals
 
-    values = {'a':1, 'b':3, 'c':3, 'd':2, 'e':1, 'f':4,
-          'g':2, 'h':4, 'i':1, 'j':8, 'k':5, 'l':1,
-          'm':3, 'n':1, 'o':1, 'p':3, 'q':10, 'r':1,
-          's':1, 't':1, 'u':1, 'v':5, 'w':4, 'x':8,
-          'y':4, 'z':10, '*':0}
+    mode = None
+    while mode != 'c' and mode != 'w':
+        mode = input('classic scrabble or words with friends? (c/w): ')
+    boardController = BoardManager(True if mode == 'c' else False)
+
+    values = boardController.values
     boardLength = boardController.boardLength
     board = boardController.loadBoard()
-    specials = boardController.getSpecials()
-    subs = DictionaryManager().loadDictionary()
+    specials = boardController.specials
+    illegals = {}
+
+    LITEDICT = True
+    subs = DictionaryManager('corncob_lowercase.txt').loadDictionary()
 
 """ solver utilities: """
 def scoreWord(word, coords, across):
@@ -289,7 +355,7 @@ def scoreWord(word, coords, across):
                         if i == x:
                             intersectScore += values[char] * thisCharMod
                         else:
-                            intersectScore += values[board[i][y]]
+                            intersectScore += values[board[i][y][0]]
                         i += 1
                     sideScores += intersectScore * thisWordMod
         else:
@@ -311,7 +377,7 @@ def wordCheck(coords, right):
         else:
             y += 1
     key = ''.join(word).replace('*', '')
-    return key in subs and subs[key][0]
+    return key in subs and subs[key][0] and key not in illegals
 
 def anchors():
     """ get all possible starting locations for word building """
@@ -528,7 +594,7 @@ def getBestPlays(hand, m):
             ref = subs[key]
 
             # word check / scoring:
-            if ref[0] and L > 1:
+            if ref[0] and L > 1 and key not in illegals:
                 tryScore = scoreWord(word, (x, y), across)
                 if bestplays.size < m:
                     bestplays.insert((tryScore, word, (x, y), across))
@@ -567,7 +633,6 @@ def getBestPlays(hand, m):
                                 stack.append( (word + ['*' + _char], (x, y), False, list(remainder)) )
 
     return bestplays
-
 
 """ USER I/O: """
 def outputBestPlays(bestplays):
@@ -617,8 +682,8 @@ def outputBestPlays(bestplays):
 def main():
     from re import match
     from datetime import datetime
-    from timeit import timeit
-    global board
+    global board, subs
+
     while True:
         action = input('\nwhat up: ')
         try:
@@ -651,12 +716,22 @@ def main():
                 boardController.removeSection(board, (x, y), L, True if justif == 'r' else False)
                 boardController.saveBoard(board)
                 print('removed successfully')
+            elif action == 'b': # ban word at playtime
+                word = input('word: ').lower()
+                assert word.isalpha()
+                illegals[word] = None
+                print('banned successfully')
+            elif action == 'w': # switch dictionary
+                decis = input('Lite dict or full scrabble dict? (l/f): ')
+                assert decis == 'l' or decis == 'f'
+                subs = DictionaryManager(
+                    'corncob_lowercase.txt' if decis == 'l' else 'twl06.txt').loadDictionary()
             elif action == 'd': # display board
                 boardController.display(board)
             elif action == 's': # display specials
                 boardController.display(specials)
             elif action == 'c': # clear board
-                confirm = input('you sure?: ')
+                confirm = input('you sure? (y/n): ')
                 if confirm[0].lower() == 'y':
                     board = [[None for i in range(boardLength)] for j in range(boardLength)]
                     from os import remove
@@ -664,13 +739,17 @@ def main():
                         remove(boardController.dataStore)
                     except OSError:
                         pass
+                else:
+                    pass
             elif action == 'e': # exit
                 boardController.saveBoard(board)
                 return
             elif action == 'h':
                 print('COMMANDS:\n'
                       ' m - get best moves\n u - input a word on board\n'
-                      ' r - remove a section\n d - display current board\n'
+                      ' r - remove a section\n b - ban a word\n'
+                      ' a - allow a word\n w - switch current dictionary\n'
+                      'd - display current board\n'
                       ' s - display specials\n c - clear the board\n'
                       ' e - exit gracefully\n h - list of commands\n'
                       'CONSTANTS:\n'
@@ -681,9 +760,5 @@ def main():
             print('invalid input. input "h" for help menu.')
 
 if __name__ == '__main__':
-    from os import path
-    if not path.isfile(DictionaryManager.dataStore):
-        DictionaryManager().reprocess('corncob_lowercase.txt')
-    boardController = BoardManager()
     init()
     main()
