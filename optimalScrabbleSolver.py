@@ -259,7 +259,6 @@ class BoardManager():
             return list(map(list, zip(*content)))
         else:
             return [[None for i in range(boardLength)] for j in range(boardLength)]
-
     def display(self, object):
         n = self.boardLength
         p = lambda *x : print(*x, sep='', end='')
@@ -292,9 +291,6 @@ class BoardManager():
                     board[x][y + i - k] = j
     def removeSection(self, board, coords, length, right):
         self.addWord(board, [None for i in range(length)], coords, right)
-    def removeChar(self, board, coords):
-        x, y = coords
-        board[x][y] = None
 
 def init():
     """ sets up global variables for program """
@@ -310,10 +306,8 @@ def init():
     boardLength = boardController.boardLength
     board = boardController.loadBoard()
     specials = boardController.specials
-    illegals = {}
-
-    LITEDICT = True
     subs = DictionaryManager('corncob_lowercase.txt').loadDictionary()
+    illegals = {}
 
 """ solver utilities: """
 def scoreWord(word, coords, across):
@@ -441,7 +435,7 @@ def anchors():
                     memos[(x + 1, y, False)] = None
     return content
 
-def adjecentCheck(char, coords, inverted):
+def adjacentCheck(char, coords, inverted):
     """ check if there are intersecting strings,
         and if so, if they are valid words
     """
@@ -552,14 +546,14 @@ def getBestPlays(hand, m):
             # check adjacent word conflicts:
             if front:
                 if across:
-                    valid = adjecentCheck(word[0], (x, y), True)
+                    valid = adjacentCheck(word[0], (x, y), True)
                 else:
-                    valid = adjecentCheck(word[0], (x, y), False)
+                    valid = adjacentCheck(word[0], (x, y), False)
             else:
                 if across:
-                    valid = adjecentCheck(word[-1], (x + L - 1, y), True)
+                    valid = adjacentCheck(word[-1], (x + L - 1, y), True)
                 else:
-                    valid = adjecentCheck(word[-1], (x, y + L - 1), False)
+                    valid = adjacentCheck(word[-1], (x, y + L - 1), False)
             if not valid:
                 continue
 
@@ -634,7 +628,6 @@ def getBestPlays(hand, m):
 
     return bestplays
 
-""" USER I/O: """
 def outputBestPlays(bestplays):
     """ displays contents of bestPlays, and the resulting
         adjacent words of a particular play """
@@ -739,8 +732,6 @@ def main():
                         remove(boardController.dataStore)
                     except OSError:
                         pass
-                else:
-                    pass
             elif action == 'e': # exit
                 boardController.saveBoard(board)
                 return
@@ -749,7 +740,7 @@ def main():
                       ' m - get best moves\n u - input a word on board\n'
                       ' r - remove a section\n b - ban a word\n'
                       ' a - allow a word\n w - switch current dictionary\n'
-                      'd - display current board\n'
+                      ' d - display current board\n'
                       ' s - display specials\n c - clear the board\n'
                       ' e - exit gracefully\n h - list of commands\n'
                       'CONSTANTS:\n'
